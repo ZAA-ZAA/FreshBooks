@@ -1,0 +1,5 @@
+{
+  "name": "FreshBooks Clone",
+  "description": "A high-fidelity frontend clone of the FreshBooks accounting software, featuring a public marketing site, authentication flow simulation, dashboard with analytics, and a fully functional invoice creator.",
+  "requestFramePermissions": []
+}
