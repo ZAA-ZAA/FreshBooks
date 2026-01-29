@@ -2,18 +2,34 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../App';
-import { Lock, ShieldCheck, HelpCircle, Globe, ArrowLeft } from 'lucide-react';
+import { Lock, ShieldCheck, HelpCircle, Globe, ArrowLeft, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login();
-    navigate('/dashboard');
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const result = await login(formData.email, formData.password);
+      
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Login failed. Please check your credentials.');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -45,6 +61,13 @@ export default function Login() {
           <h1 className="text-2xl font-bold text-[#002a63]">Log in to FreshBooks</h1>
         </div>
 
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <input
@@ -54,6 +77,7 @@ export default function Login() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -65,6 +89,7 @@ export default function Login() {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required
+              disabled={isLoading}
             />
             <button
               type="button"
@@ -77,9 +102,10 @@ export default function Login() {
 
           <button
             type="submit"
-            className="w-full bg-[#00a651] hover:bg-[#008541] text-white font-black py-4 rounded-lg shadow-lg transition-all active:scale-[0.98] text-lg"
+            disabled={isLoading}
+            className="w-full bg-[#00a651] hover:bg-[#008541] text-white font-black py-4 rounded-lg shadow-lg transition-all active:scale-[0.98] text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Log In
+            {isLoading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
 
@@ -103,7 +129,15 @@ export default function Login() {
           </button>
         </div>
 
-        <div className="mt-10 flex flex-col items-center gap-4 text-center">
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-700">
+            <strong>Default Login:</strong><br />
+            Email: admin@freshbooks.local<br />
+            Password: admin123
+          </p>
+        </div>
+
+        <div className="mt-6 flex flex-col items-center gap-4 text-center">
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 w-full">
             <a href="#" className="text-sm font-bold text-[#0075dd] hover:underline">Forgot Your Password?</a>
             <a href="#" className="text-sm font-bold text-[#0075dd] hover:underline">Can't Log In?</a>

@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
     Search, ChevronDown, Filter, MoreHorizontal, Pencil, Archive, 
     Trash2, Mail, Phone, Plus, X, UserPlus, Info, CheckCircle2,
-    Users, DollarSign, List, History, ChevronRight
+    Users, DollarSign, List, History, ChevronRight, AlertCircle, Loader2
 } from 'lucide-react';
+import { clientsApi, ClientData } from '../api';
 
 const StatBox = ({ label, value }: { label: string, value: string }) => (
     <div className="flex flex-col items-center flex-1">
@@ -16,21 +17,28 @@ const StatBox = ({ label, value }: { label: string, value: string }) => (
 
 export default function ClientsList() {
     const navigate = useNavigate();
-    const [clients, setClients] = useState<any[]>([]);
+    const [clients, setClients] = useState<ClientData[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [showOnboarding, setShowOnboarding] = useState(true);
-    const [toast, setToast] = useState<string | null>(null);
+    const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const moreActionsRef = useRef(null);
 
-    const showNotification = (msg: string) => {
-        setToast(msg);
+    const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
     };
 
-    const refreshData = () => {
-        const storedClients = localStorage.getItem('fb_clients');
-        if (storedClients) setClients(JSON.parse(storedClients));
+    const refreshData = async () => {
+        setIsLoading(true);
+        const response = await clientsApi.getAll();
+        if (response.success && response.data) {
+            setClients(response.data);
+        } else {
+            showNotification(response.error || 'Failed to load clients', 'error');
+        }
+        setIsLoading(false);
     };
 
     useEffect(() => {
@@ -38,8 +46,8 @@ export default function ClientsList() {
     }, []);
 
     const filteredClients = clients.filter(c => 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        c.company.toLowerCase().includes(searchTerm.toLowerCase())
+        (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (c.company || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const toggleSelect = (id: string) => {
@@ -48,38 +56,52 @@ export default function ClientsList() {
 
     const toggleSelectAll = () => {
         if (selectedIds.length === filteredClients.length) setSelectedIds([]);
-        else setSelectedIds(filteredClients.map(c => c.id));
+        else setSelectedIds(filteredClients.map(c => c.id!));
     };
 
-    const handleDelete = (id: string, e: React.MouseEvent) => {
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (window.confirm('Are you sure you want to delete this client? All associated records will be detached.')) {
-            const updated = clients.filter(c => c.id !== id);
-            localStorage.setItem('fb_clients', JSON.stringify(updated));
-            setClients(updated);
-            setSelectedIds(prev => prev.filter(i => i !== id));
-            showNotification('Client successfully removed.');
+            const response = await clientsApi.delete(id);
+            if (response.success) {
+                setClients(clients.filter(c => c.id !== id));
+                setSelectedIds(prev => prev.filter(i => i !== id));
+                showNotification('Client successfully removed.');
+            } else {
+                showNotification(response.error || 'Failed to delete client', 'error');
+            }
         }
     };
 
-    const handleBulkDelete = () => {
+    const handleBulkDelete = async () => {
         if (window.confirm(`Are you sure you want to delete ${selectedIds.length} selected clients?`)) {
-            const updated = clients.filter(c => !selectedIds.includes(c.id));
-            localStorage.setItem('fb_clients', JSON.stringify(updated));
-            setClients(updated);
-            showNotification(`${selectedIds.length} clients removed.`);
+            let successCount = 0;
+            for (const id of selectedIds) {
+                const response = await clientsApi.delete(id);
+                if (response.success) successCount++;
+            }
+            await refreshData();
+            showNotification(`${successCount} clients removed.`);
             setSelectedIds([]);
         }
     };
 
     const totalOutstanding = clients.reduce((acc, curr) => acc + (curr.balance || 0), 0);
 
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-10 animate-in fade-in duration-300 pb-20 font-sans relative">
             {toast && (
-                <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-fb-slate text-white px-6 py-3 rounded shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4">
-                    <CheckCircle2 className="text-fb-green" size={20} />
-                    <span className="font-bold">{toast}</span>
+                <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ring-2 ring-black/10 ${toast.type === 'error' ? 'bg-red-500 text-white ring-red-600/30' : 'bg-fb-slate text-white ring-fb-green/30'}`}>
+                    {toast.type === 'error' ? <AlertCircle size={22} /> : <CheckCircle2 className="text-fb-green" size={22} />}
+                    <span className="font-bold text-sm">{toast.message}</span>
                 </div>
             )}
 
@@ -133,9 +155,9 @@ export default function ClientsList() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {filteredClients.map(client => (
-                            <tr key={client.id} className={`hover:bg-[#f0f9ff]/50 cursor-pointer group transition-colors ${selectedIds.includes(client.id) ? 'bg-[#f0f9ff]' : ''}`} onClick={() => navigate(`/clients/${client.id}`)}>
+                            <tr key={client.id} className={`hover:bg-[#f0f9ff]/50 cursor-pointer group transition-colors ${selectedIds.includes(client.id!) ? 'bg-[#f0f9ff]' : ''}`} onClick={() => navigate(`/clients/${client.id}`)}>
                                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                    <input type="checkbox" className="rounded border-gray-300 text-[#0075dd] w-4 h-4" checked={selectedIds.includes(client.id)} onChange={() => toggleSelect(client.id)} />
+                                    <input type="checkbox" className="rounded border-gray-300 text-[#0075dd] w-4 h-4" checked={selectedIds.includes(client.id!)} onChange={() => toggleSelect(client.id!)} />
                                 </td>
                                 <td className="p-4">
                                     <div className="font-bold text-[#0075dd] text-[13px]">{client.company}</div>
@@ -150,11 +172,20 @@ export default function ClientsList() {
                                 <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex gap-2 opacity-0 group-hover:opacity-100">
                                         <button onClick={() => navigate(`/clients/${client.id}/edit`)} className="p-1.5 text-gray-400 hover:text-[#0075dd]"><Pencil size={14} /></button>
-                                        <button onClick={(e) => handleDelete(client.id, e)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+                                        <button onClick={(e) => handleDelete(client.id!, e)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
                                     </div>
                                 </td>
                             </tr>
                         ))}
+                        {filteredClients.length === 0 && (
+                            <tr>
+                                <td colSpan={5} className="p-16 text-center">
+                                    <Users size={48} className="text-gray-200 mx-auto mb-4" />
+                                    <p className="text-gray-400 font-bold">No clients found</p>
+                                    <button onClick={() => navigate('/clients/new')} className="text-[#0075dd] font-bold text-sm mt-2 hover:underline">Add your first client</button>
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>

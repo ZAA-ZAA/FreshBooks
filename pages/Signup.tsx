@@ -1,8 +1,10 @@
 // @ts-nocheck
 import React, { useState } from 'react';
 import { AuthStep } from '../types';
-import { Loader2, Check, ChevronDown, HelpCircle, LogOut, ArrowLeft, ShieldCheck, Globe } from 'lucide-react';
+import { Loader2, Check, ChevronDown, HelpCircle, LogOut, ArrowLeft, ShieldCheck, Globe, AlertCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../App';
+import { authApi } from '../api';
 
 interface SignupProps {
   authStep: AuthStep;
@@ -43,7 +45,9 @@ const CustomSelect = ({ label, value, onChange, options, placeholder = "Choose a
 
 export default function Signup({ authStep, setAuthStep, onComplete }: SignupProps) {
   const navigate = useNavigate();
+  const { register: registerUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -64,15 +68,53 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
     customization: '' 
   });
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setError(null);
+    if (authStep === AuthStep.SIGNUP_START) {
+      if (!formData.email?.trim() || !formData.password?.trim()) {
+        setError('Please enter your email and password.');
+        return;
+      }
+      if (!formData.agreedToTerms) {
+        setError('Please agree to the Terms of Service and Privacy Policy.');
+        return;
+      }
+      setLoading(true);
+      const checkRes = await authApi.checkEmail(formData.email.trim());
+      setLoading(false);
+      if (!checkRes.success) {
+        setError(checkRes.error || 'Could not verify email. Please try again.');
+        return;
+      }
+      if (checkRes.data && (checkRes.data as { available?: boolean }).available === false) {
+        setError('This email is already registered. Please log in or use a different email.');
+        return;
+      }
+    }
+    if (authStep === AuthStep.SURVEY_BUSINESS) {
+      setLoading(true);
+      const result = await registerUser({
+        email: formData.email.trim(),
+        password: formData.password,
+        company_name: formData.companyName || formData.email.split('@')[0],
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone,
+      });
+      setLoading(false);
+      if (result.success) {
+        onComplete();
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Registration failed. Please try again.');
+      }
+      return;
+    }
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      if (authStep === AuthStep.SURVEY_BUSINESS) {
-        onComplete();
-      } else {
-        setAuthStep(authStep + 1);
-      }
+      setError(null);
+      setAuthStep(authStep + 1);
     }, 600);
   };
 
@@ -116,7 +158,20 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
             <p className="text-gray-500 text-sm font-medium">No credit card required. Cancel anytime.</p>
           </div>
 
-          <div className="space-y-4 text-left">
+          {/* Fixed toast so error is visible even when scrolled down */}
+            {error && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] max-w-md mx-4 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 bg-red-500 text-white border-2 border-red-600 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <AlertCircle className="flex-shrink-0" size={24} />
+                <p className="font-bold text-sm">{error}</p>
+              </div>
+            )}
+            <div className="space-y-4 text-left">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
             <div>
               <input
                 type="email"
@@ -230,6 +285,18 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
 
           {authStep === AuthStep.SURVEY_PROFILE && (
             <div className="animate-in fade-in slide-in-from-left-6 duration-500">
+              {error && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] max-w-md mx-4 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 bg-red-500 text-white border-2 border-red-600 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <AlertCircle className="flex-shrink-0" size={24} />
+                  <p className="font-bold text-sm">{error}</p>
+                </div>
+              )}
+              {error && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                  <p className="text-red-700 text-sm">{error}</p>
+                </div>
+              )}
               <h1 className="text-4xl font-bold text-[#002a63] leading-tight mb-2">Welcome!</h1>
               <h2 className="text-4xl font-bold text-[#002a63] leading-tight mb-12">Let's Get You Set Up</h2>
 
@@ -296,6 +363,18 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
 
           {authStep === AuthStep.SURVEY_BUSINESS && (
             <div className="animate-in fade-in slide-in-from-right-6 duration-500">
+              {error && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] max-w-md mx-4 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 bg-red-500 text-white border-2 border-red-600 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <AlertCircle className="flex-shrink-0" size={24} />
+                  <p className="font-bold text-sm">{error}</p>
+                </div>
+              )}
+              {error && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                  <p className="text-red-700 text-sm">{error}</p>
+                </div>
+              )}
               <h1 className="text-4xl font-bold text-[#002a63] leading-tight mb-12">Tell us about your business so we can tailor your experience</h1>
 
               <div className="space-y-6">

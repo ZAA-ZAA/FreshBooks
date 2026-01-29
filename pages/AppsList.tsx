@@ -61,7 +61,7 @@ export default function AppsList() {
         <div className="space-y-12 animate-in fade-in duration-300 pb-20 relative">
              {/* Toast */}
              {showToast && (
-                <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-[#28303f] text-white px-8 py-3 rounded-xl shadow-2xl flex items-center animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] bg-[#28303f] text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ring-2 ring-black/10">
                     <CheckCircle2 className="text-fb-green mr-3" size={24} />
                     <span className="font-bold">Integration Authenticated: {connectedApp}</span>
                 </div>

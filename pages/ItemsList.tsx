@@ -3,64 +3,103 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     Plus, Search, Package, X, CheckCircle2, MoreHorizontal, 
-    Pencil, Trash2, Filter, Settings, Box, Zap
+    Pencil, Trash2, Filter, Settings, Box, Zap, Loader2, AlertCircle
 } from 'lucide-react';
+import { itemsApi, ItemData } from '../api';
 
 export default function ItemsList() {
     const navigate = useNavigate();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showToast, setShowToast] = useState(false);
-    const [editingItem, setEditingItem] = useState(null);
+    const [editingItem, setEditingItem] = useState<ItemData | null>(null);
     const [newItem, setNewItem] = useState({ name: '', description: '', rate: '' });
-    const [items, setItems] = useState<any[]>([]);
+    const [items, setItems] = useState<ItemData[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const stored = localStorage.getItem('fb_items');
-        if (stored) setItems(JSON.parse(stored));
+        loadItems();
     }, []);
 
+    const loadItems = async () => {
+        setIsLoading(true);
+        const response = await itemsApi.getAll();
+        if (response.success && response.data) {
+            setItems(response.data);
+        }
+        setIsLoading(false);
+    };
+
     const filteredItems = items.filter(i => 
-        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (i.description || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleSave = () => {
-        let updated;
-        if (editingItem) {
-            updated = items.map(i => i.id === editingItem.id ? { ...i, ...newItem, rate: parseFloat(newItem.rate) || 0 } : i);
-        } else {
-            const item = { id: Date.now(), ...newItem, rate: parseFloat(newItem.rate) || 0, qty: 1 };
-            updated = [item, ...items];
+    const handleSave = async () => {
+        if (!newItem.name) {
+            setError('Item name is required');
+            return;
         }
-        
-        setItems(updated);
-        localStorage.setItem('fb_items', JSON.stringify(updated));
-        setIsModalOpen(false);
-        setEditingItem(null);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
-        setNewItem({ name: '', description: '', rate: '' });
+
+        setIsSaving(true);
+        setError(null);
+
+        const itemData: ItemData = {
+            name: newItem.name,
+            description: newItem.description,
+            rate: parseFloat(newItem.rate) || 0
+        };
+
+        let response;
+        if (editingItem) {
+            response = await itemsApi.update(editingItem.id!, itemData);
+        } else {
+            response = await itemsApi.create(itemData);
+        }
+
+        if (response.success) {
+            await loadItems();
+            setIsModalOpen(false);
+            setEditingItem(null);
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+            setNewItem({ name: '', description: '', rate: '' });
+        } else {
+            setError(response.error || 'Failed to save item');
+        }
+
+        setIsSaving(false);
     };
 
-    const handleEdit = (item) => {
+    const handleEdit = (item: ItemData) => {
         setEditingItem(item);
-        setNewItem({ name: item.name, description: item.description, rate: item.rate.toString() });
+        setNewItem({ name: item.name || '', description: item.description || '', rate: (item.rate || 0).toString() });
         setIsModalOpen(true);
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id: string) => {
         if (window.confirm('Delete this item?')) {
-            const updated = items.filter(i => i.id !== id);
-            setItems(updated);
-            localStorage.setItem('fb_items', JSON.stringify(updated));
+            const response = await itemsApi.delete(id);
+            if (response.success) {
+                await loadItems();
+            }
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-10 animate-in fade-in duration-300 pb-20 relative">
              {showToast && (
-                <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-[#28303f] text-white px-8 py-3 rounded-xl shadow-2xl flex items-center animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] bg-[#28303f] text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ring-2 ring-black/10">
                     <CheckCircle2 className="text-fb-green mr-3" size={20} />
                     <span className="font-bold">Catalog Synchronized</span>
                 </div>
@@ -106,7 +145,7 @@ export default function ItemsList() {
                             </div>
                             <div className="flex flex-col space-y-1 relative z-10">
                                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rate</div>
-                                <div className="text-2xl font-black text-fb-navy">₱{item.rate.toLocaleString()}</div>
+                                <div className="text-2xl font-black text-fb-navy">₱{(item.rate || 0).toLocaleString()}</div>
                             </div>
                             <div className="absolute -bottom-4 -right-4 opacity-[0.02] group-hover:opacity-10 transition-opacity">
                                 <Box size={140} />
@@ -166,13 +205,13 @@ export default function ItemsList() {
                                     <td className="p-8" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded-lg border-gray-300 text-fb-blue w-5 h-5" /></td>
                                     <td className="p-8 border-l-8 border-fb-blue/30 group-hover:border-fb-blue transition-all">
                                         <div className="font-black text-fb-navy group-hover:text-fb-blue text-lg leading-tight mb-1">{item.name}</div>
-                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">SKU: {item.id.toString().slice(-6)}</div>
+                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">SKU: {(item.id || '').toString().slice(-6)}</div>
                                     </td>
                                     <td className="p-8">
                                         <div className="text-gray-500 font-medium line-clamp-2 max-w-sm italic">"{item.description || 'No description provided'}"</div>
                                     </td>
                                     <td className="p-8 text-right">
-                                        <div className="font-black text-fb-navy text-xl leading-none mb-1">₱{item.rate.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                        <div className="font-black text-fb-navy text-xl leading-none mb-1">₱{(item.rate || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                         <span className="text-[10px] font-black text-fb-blue bg-fb-blue/5 px-2 py-1 rounded uppercase tracking-widest border border-fb-blue/10">Standard</span>
                                     </td>
                                     <td className="p-8 text-right" onClick={e => e.stopPropagation()}>
@@ -180,7 +219,7 @@ export default function ItemsList() {
                                             <button onClick={() => handleEdit(item)} className="w-10 h-10 bg-fb-blue/5 text-fb-blue rounded-xl flex items-center justify-center hover:bg-fb-blue hover:text-white transition-all shadow-sm">
                                                 <Pencil size={18} />
                                             </button>
-                                            <button onClick={() => handleDelete(item.id)} className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                                            <button onClick={() => handleDelete(item.id!)} className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
                                                 <Trash2 size={18} />
                                             </button>
                                         </div>
@@ -210,10 +249,17 @@ export default function ItemsList() {
                                 <h2 className="text-3xl font-black text-fb-navy">{editingItem ? 'Modify Identity' : 'New Catalog Entry'}</h2>
                                 <button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-fb-navy transition-colors"><X size={32} /></button>
                             </div>
+
+                            {error && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+                                    <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                                    <p className="text-red-700 text-sm">{error}</p>
+                                </div>
+                            )}
                             
                             <div className="space-y-8">
                                 <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Item Name</label>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Item Name <span className="text-red-500">*</span></label>
                                     <input 
                                         autoFocus
                                         className="w-full border border-gray-200 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-fb-blue/5 focus:border-fb-blue outline-none font-black text-fb-navy text-xl shadow-sm transition-all" 
@@ -251,10 +297,10 @@ export default function ItemsList() {
                                 <button onClick={() => setIsModalOpen(false)} className="font-black text-gray-400 hover:text-fb-navy transition-colors uppercase tracking-[0.2em] text-xs">Discard Changes</button>
                                 <button 
                                     onClick={handleSave}
-                                    disabled={!newItem.name}
-                                    className={`font-black py-5 px-12 rounded-2xl shadow-xl text-white transition-all transform active:scale-95 flex items-center gap-3 ${!newItem.name ? 'bg-gray-200 cursor-not-allowed' : 'bg-fb-green hover:brightness-110 shadow-fb-green/20'}`}
+                                    disabled={!newItem.name || isSaving}
+                                    className={`font-black py-5 px-12 rounded-2xl shadow-xl text-white transition-all transform active:scale-95 flex items-center gap-3 ${!newItem.name || isSaving ? 'bg-gray-200 cursor-not-allowed' : 'bg-fb-green hover:brightness-110 shadow-fb-green/20'}`}
                                 >
-                                    {editingItem ? 'Update Entry' : 'Add to Catalog'} <CheckCircle2 size={22} />
+                                    {isSaving ? 'Saving...' : (editingItem ? 'Update Entry' : 'Add to Catalog')} <CheckCircle2 size={22} />
                                 </button>
                             </div>
                         </div>

@@ -1,7 +1,9 @@
 // @ts-nocheck
 import React, { useState, useContext, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthStep } from './types';
+import { initDatabase, getTenantId, setTenantId, authApi, clearTenantId } from './api';
 import PublicLayout from './layouts/PublicLayout';
 import AppLayout from './layouts/AppLayout';
 import Home from './pages/Home';
@@ -37,86 +39,186 @@ import AppsList from './pages/AppsList';
 // --- Auth Context ---
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: () => void;
+  isLoading: boolean;
+  user: any | null;
+  tenant: any | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  register: (data: any) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const AuthContext = React.createContext<AuthContextType>({
   isAuthenticated: false,
-  login: () => {},
+  isLoading: true,
+  user: null,
+  tenant: null,
+  login: async () => ({ success: false }),
   logout: () => {},
+  register: async () => ({ success: false }),
 });
 
 export const useAuth = () => useContext(AuthContext);
 
-// --- Data Seeding ---
-const seedData = () => {
-    const defaultInvoices = [
-        { 
-            id: '1', 
-            number: '0000001', 
-            client: 'ABC Inc.', 
-            date: '2026-01-27', 
-            amount: 29.24, 
-            status: 'Paid', 
-            items: [
-                { id: 'i1', name: 'can edit add item name', rate: 2.00, qty: 3, tax: 0 },
-                { id: 'i2', name: 'can also edit rate add and change qty and line total', rate: 1.00, qty: 11, tax: 0 },
-                { id: 'i3', name: '', rate: 12.00, qty: 1, tax: 2 }
-            ],
-            notes: '',
-            terms: ''
-        }
-    ];
-    const defaultClients = [
-        { id: '775437', name: 'Zoen Aldueza', company: 'ABC Inc.', email: 'zoen@abc.com', phone: '0912', balance: 0 },
-        { id: '1', name: 'John Doe', company: 'Acme Corp', email: 'john@acme.com', phone: '555-0123', balance: 2500.00 },
-        { id: '2', name: 'Jane Smith', company: 'Design Studio', email: 'jane@design.studio', phone: '555-0987', balance: 0 },
-    ];
-    const defaultExpenses = [
-        { id: '1', date: '2026-01-29', merchant: 'ABC', category: 'Rent or Lease', amount: 1321.00, status: 'Draft', description: 'test', client: 'John Doe' }
-    ];
-    const defaultItems = [
-        { id: 1, name: 'Web Design', description: 'General web design services per hour', rate: 2500, qty: 1 },
-        { id: 2, name: 'SEO Audit', description: 'Comprehensive site analysis', rate: 15000, qty: 1 },
-    ];
-
-    if (!localStorage.getItem('fb_clients')) localStorage.setItem('fb_clients', JSON.stringify(defaultClients));
-    if (!localStorage.getItem('fb_invoices')) localStorage.setItem('fb_invoices', JSON.stringify(defaultInvoices));
-    if (!localStorage.getItem('fb_estimates')) localStorage.setItem('fb_estimates', JSON.stringify([]));
-    if (!localStorage.getItem('fb_expenses')) localStorage.setItem('fb_expenses', JSON.stringify(defaultExpenses));
-    if (!localStorage.getItem('fb_items')) localStorage.setItem('fb_items', JSON.stringify(defaultItems));
-    if (!localStorage.getItem('fb_payments')) localStorage.setItem('fb_payments', JSON.stringify([]));
-    if (!localStorage.getItem('fb_bills')) localStorage.setItem('fb_bills', JSON.stringify([]));
-    if (!localStorage.getItem('fb_vendors')) localStorage.setItem('fb_vendors', JSON.stringify([]));
-    if (!localStorage.getItem('fb_team')) localStorage.setItem('fb_team', JSON.stringify([]));
-    if (!localStorage.getItem('fb_templates')) localStorage.setItem('fb_templates', JSON.stringify([]));
-};
-
 export default function App() {
   const [authStep, setAuthStep] = useState<AuthStep>(AuthStep.SIGNUP_START);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-      return localStorage.getItem('fb_auth') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<any | null>(null);
+  const [tenant, setTenant] = useState<any | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
+  // Initialize app and check authentication
   useEffect(() => {
-      seedData();
+    const initApp = async () => {
+      try {
+        // Initialize database (creates default tenant if needed)
+        const initResponse = await initDatabase();
+        
+        if (!initResponse.success) {
+          setBackendError('Unable to connect to backend. Make sure the Python server is running on http://localhost:5000');
+          setIsLoading(false);
+          return;
+        }
+
+        // Check if user was previously logged in
+        const storedUser = localStorage.getItem('fb_user');
+        const storedTenant = localStorage.getItem('fb_tenant');
+        
+        if (storedUser && storedTenant) {
+          try {
+            const userData = JSON.parse(storedUser);
+            const tenantData = JSON.parse(storedTenant);
+            setUser(userData);
+            setTenant(tenantData);
+            setTenantId(tenantData.id);
+            setIsAuthenticated(true);
+          } catch (e) {
+            // Invalid stored data, clear it
+            localStorage.removeItem('fb_user');
+            localStorage.removeItem('fb_tenant');
+          }
+        }
+      } catch (error) {
+        console.error('App initialization error:', error);
+        setBackendError('Unable to connect to backend. Make sure the Python server is running on http://localhost:5000');
+      }
+      
+      setIsLoading(false);
+    };
+
+    initApp();
   }, []);
 
-  const login = () => {
-      setAuthStep(AuthStep.COMPLETED);
+  const login = async (email: string, password: string) => {
+    const response = await authApi.login(email, password);
+    
+    if (response.success && response.data) {
+      setUser(response.data.user);
+      setTenant(response.data.tenant);
       setIsAuthenticated(true);
-      localStorage.setItem('fb_auth', 'true');
+      setAuthStep(AuthStep.COMPLETED);
+      
+      // Store for persistence
+      localStorage.setItem('fb_user', JSON.stringify(response.data.user));
+      localStorage.setItem('fb_tenant', JSON.stringify(response.data.tenant));
+      
+      return { success: true };
+    }
+    
+    return { success: false, error: response.error || 'Login failed' };
+  };
+
+  const register = async (data: any) => {
+    const response = await authApi.register(data);
+    
+    if (response.success && response.data) {
+      setUser(response.data.user);
+      setTenant(response.data.tenant);
+      setIsAuthenticated(true);
+      setAuthStep(AuthStep.COMPLETED);
+      
+      // Store for persistence
+      localStorage.setItem('fb_user', JSON.stringify(response.data.user));
+      localStorage.setItem('fb_tenant', JSON.stringify(response.data.tenant));
+      
+      return { success: true };
+    }
+    
+    return { success: false, error: response.error || 'Registration failed' };
   };
 
   const logout = () => {
+    // Apply auth state synchronously so navigation sees updated isAuthenticated
+    flushSync(() => {
       setIsAuthenticated(false);
+      setUser(null);
+      setTenant(null);
       setAuthStep(AuthStep.SIGNUP_START);
-      localStorage.removeItem('fb_auth');
+    });
+    authApi.logout();
+    localStorage.removeItem('fb_user');
+    localStorage.removeItem('fb_tenant');
   };
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f7f9]">
+        <div className="text-center">
+          <div className="flex items-center gap-3 mb-6 justify-center">
+            <div className="bg-[#0075dd] p-2 rounded-lg">
+              <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
+            </div>
+            <span className="text-3xl font-black text-[#002a63] tracking-tight">FreshBooks</span>
+          </div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0075dd] mx-auto"></div>
+          <p className="text-gray-500 mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show backend error
+  if (backendError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f7f9] p-4">
+        <div className="bg-white rounded-xl shadow-xl p-8 max-w-lg text-center">
+          <div className="flex items-center gap-3 mb-6 justify-center">
+            <div className="bg-[#0075dd] p-2 rounded-lg">
+              <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
+            </div>
+            <span className="text-3xl font-black text-[#002a63] tracking-tight">FreshBooks</span>
+          </div>
+          
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <h2 className="text-red-700 font-bold text-lg mb-2">Backend Connection Error</h2>
+            <p className="text-red-600 text-sm">{backendError}</p>
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4 text-left">
+            <h3 className="font-bold text-gray-700 mb-2">To start the backend:</h3>
+            <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+              <li>Open a terminal in the <code className="bg-gray-200 px-1 rounded">backend</code> folder</li>
+              <li>Create a <code className="bg-gray-200 px-1 rounded">.env</code> file from <code className="bg-gray-200 px-1 rounded">.env.example</code></li>
+              <li>Set your PostgreSQL password in <code className="bg-gray-200 px-1 rounded">.env</code></li>
+              <li>Run: <code className="bg-gray-200 px-1 rounded">pip install -r requirements.txt</code></li>
+              <li>Run: <code className="bg-gray-200 px-1 rounded">python app.py</code></li>
+            </ol>
+          </div>
+          
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-6 bg-[#0075dd] text-white px-6 py-2 rounded-lg font-bold hover:bg-[#005aab]"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, tenant, login, logout, register }}>
         <HashRouter>
         <Routes>
             <Route element={<PublicLayout />}>
@@ -126,7 +228,7 @@ export default function App() {
 
             <Route 
               path="/signup" 
-              element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup authStep={authStep} setAuthStep={setAuthStep} onComplete={login} />} 
+              element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup authStep={authStep} setAuthStep={setAuthStep} onComplete={() => {}} />} 
             />
             <Route 
               path="/login" 

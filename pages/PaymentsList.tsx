@@ -3,29 +3,29 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     Search, ChevronDown, Plus, X, Eye, BarChart3, CreditCard, 
-    Filter, MoreHorizontal, Pencil, Archive, Trash2, Info, Check, AlertCircle, CheckCircle2
+    Filter, MoreHorizontal, Pencil, Archive, Trash2, Info, Check, AlertCircle, CheckCircle2, Loader2
 } from 'lucide-react';
+import { paymentsApi, invoicesApi, PaymentData, InvoiceData } from '../api';
 
 export default function PaymentsList() {
     const navigate = useNavigate();
     const location = useLocation();
-    const [payments, setPayments] = useState<any[]>([]);
-    const [invoices, setInvoices] = useState<any[]>([]);
+    const [payments, setPayments] = useState<PaymentData[]>([]);
+    const [invoices, setInvoices] = useState<InvoiceData[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [showOnboarding, setShowOnboarding] = useState(true);
     const [activeTab, setActiveTab] = useState('Invoice Payments');
     const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     
-    // Refs for outside click handling
     const recommendationsRef = useRef(null);
 
-    // Toast state
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
-    // Quick Add State
     const [quickAddData, setQuickAddData] = useState({
         invoice: '', client: '', date: new Date().toISOString().split('T')[0],
-        method: 'Cash', amount: '', notes: ''
+        method: 'Cash', amount: '', notes: '', invoice_id: ''
     });
     const [showRecommendations, setShowRecommendations] = useState(false);
 
@@ -34,15 +34,27 @@ export default function PaymentsList() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    const refreshData = () => {
-        const storedPayments = JSON.parse(localStorage.getItem('fb_payments') || '[]');
-        const storedInvoices = JSON.parse(localStorage.getItem('fb_invoices') || '[]');
-        setPayments(storedPayments);
-        setInvoices(storedInvoices);
+    const refreshData = async () => {
+        setIsLoading(true);
+        
+        const [paymentsResponse, invoicesResponse] = await Promise.all([
+            paymentsApi.getAll(),
+            invoicesApi.getAll()
+        ]);
+        
+        if (paymentsResponse.success && paymentsResponse.data) {
+            setPayments(paymentsResponse.data);
+        }
+        if (invoicesResponse.success && invoicesResponse.data) {
+            setInvoices(invoicesResponse.data);
+        }
+        
+        setIsLoading(false);
     };
 
     useEffect(() => {
         refreshData();
+        
         if (location.state?.quickAdd) {
             setIsQuickAddOpen(true);
             setQuickAddData(prev => ({
@@ -50,6 +62,7 @@ export default function PaymentsList() {
                 invoice: location.state.invoiceNumber || '',
                 client: location.state.client || '',
                 amount: location.state.amount?.toString() || '',
+                invoice_id: location.state.invoiceId || ''
             }));
         }
 
@@ -63,34 +76,32 @@ export default function PaymentsList() {
     }, [location.state]);
 
     const filteredPayments = payments.filter(p => 
-        p.client.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        p.invoice.toLowerCase().includes(searchTerm.toLowerCase())
+        (p.client || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (p.invoice || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Robust recommendation logic
     const recommendations = invoices.filter(inv => {
         const matchesStatus = inv.status !== 'Paid';
         const searchStr = quickAddData.invoice.toLowerCase();
         const matchesInvoiceNum = String(inv.number).toLowerCase().includes(searchStr);
-        const matchesClient = inv.client.toLowerCase().includes(searchStr);
+        const matchesClient = (inv.client || '').toLowerCase().includes(searchStr);
         return matchesStatus && (matchesInvoiceNum || matchesClient);
     }).slice(0, 8);
 
-    const handleSelectInvoice = (inv: any) => {
+    const handleSelectInvoice = (inv: InvoiceData) => {
         setQuickAddData({
             ...quickAddData,
-            invoice: inv.number,
-            client: inv.client,
-            amount: inv.amount.toString()
+            invoice: inv.number || '',
+            client: inv.client || '',
+            amount: (inv.amount || 0).toString(),
+            invoice_id: inv.id || ''
         });
         setShowRecommendations(false);
     };
 
-    const handleSaveQuickAdd = () => {
-        const targetInvoice = invoices.find(inv => String(inv.number) === String(quickAddData.invoice));
-        
-        if (!targetInvoice) {
-            showNotification('Invalid Invoice: Payment must be linked to an existing invoice.', 'error');
+    const handleSaveQuickAdd = async () => {
+        if (!quickAddData.invoice_id) {
+            showNotification('Please select an invoice from the list.', 'error');
             return;
         }
 
@@ -99,49 +110,54 @@ export default function PaymentsList() {
             return;
         }
 
-        const newPayment = {
-            id: Date.now().toString(),
-            client: targetInvoice.client,
-            invoice: quickAddData.invoice,
+        setIsSaving(true);
+
+        const response = await paymentsApi.create({
+            invoice_id: quickAddData.invoice_id,
             date: quickAddData.date,
-            method: quickAddData.method,
-            notes: quickAddData.notes,
             amount: parseFloat(quickAddData.amount),
-            status: 'Paid'
-        };
+            method: quickAddData.method,
+            notes: quickAddData.notes
+        });
 
-        const updatedPayments = [newPayment, ...payments];
-        localStorage.setItem('fb_payments', JSON.stringify(updatedPayments));
-        setPayments(updatedPayments);
+        if (response.success) {
+            await refreshData();
+            setIsQuickAddOpen(false);
+            setQuickAddData({ invoice: '', client: '', date: new Date().toISOString().split('T')[0], method: 'Cash', amount: '', notes: '', invoice_id: '' });
+            showNotification('Payment recorded successfully!');
+        } else {
+            showNotification(response.error || 'Failed to record payment', 'error');
+        }
 
-        // SYNC: Update Invoice status
-        const updatedInvoices = invoices.map(inv => 
-            String(inv.number) === String(quickAddData.invoice) ? { ...inv, status: 'Paid' } : inv
-        );
-        localStorage.setItem('fb_invoices', JSON.stringify(updatedInvoices));
-        setInvoices(updatedInvoices);
-
-        setIsQuickAddOpen(false);
-        setQuickAddData({ invoice: '', client: '', date: new Date().toISOString().split('T')[0], method: 'Cash', amount: '', notes: '' });
-        showNotification('Payment recorded successfully!');
+        setIsSaving(false);
     };
 
-    const handleDelete = (id: string, e: React.MouseEvent) => {
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (window.confirm('Are you sure you want to delete this payment record?')) {
-            const updated = payments.filter(p => p.id !== id);
-            setPayments(updated);
-            localStorage.setItem('fb_payments', JSON.stringify(updated));
-            showNotification('Payment record deleted.');
+            const response = await paymentsApi.delete(id);
+            if (response.success) {
+                await refreshData();
+                showNotification('Payment record deleted.');
+            } else {
+                showNotification(response.error || 'Failed to delete payment', 'error');
+            }
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in duration-300 pb-20 font-sans relative">
-            {/* Notification Toast */}
             {toast && (
-                <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-[150] px-6 py-3 rounded shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ${toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-fb-slate text-white'}`}>
-                    {toast.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 className="text-fb-green" size={20} />}
+                <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ring-2 ring-black/10 ${toast.type === 'error' ? 'bg-red-500 text-white ring-red-600/30' : 'bg-fb-slate text-white ring-fb-green/30'}`}>
+                    {toast.type === 'error' ? <AlertCircle size={22} /> : <CheckCircle2 className="text-fb-green" size={22} />}
                     <span className="font-bold text-sm">{toast.message}</span>
                 </div>
             )}
@@ -151,7 +167,7 @@ export default function PaymentsList() {
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={() => {
-                            refreshData(); // Refresh to catch any newly created invoices
+                            refreshData();
                             setIsQuickAddOpen(true);
                         }}
                         className="bg-[#00a651] hover:bg-[#008541] text-white px-8 py-2.5 rounded font-black text-lg shadow-md transition-all active:scale-95"
@@ -193,7 +209,6 @@ export default function PaymentsList() {
                 <div className="px-8 py-3.5 text-sm font-bold text-gray-400 cursor-not-allowed">Checkout Links</div>
             </div>
 
-            {/* Container WITHOUT overflow-hidden to allow dropdown to show */}
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div className="p-4 border-b border-gray-100 flex justify-end items-center bg-gray-50/20">
                     <div className="relative">
@@ -229,7 +244,7 @@ export default function PaymentsList() {
                                                 setShowRecommendations(true);
                                             }}
                                             onChange={e => {
-                                                setQuickAddData({...quickAddData, invoice: e.target.value});
+                                                setQuickAddData({...quickAddData, invoice: e.target.value, invoice_id: ''});
                                                 setShowRecommendations(true);
                                             }} 
                                             placeholder="Find Invoice #..." 
@@ -237,7 +252,6 @@ export default function PaymentsList() {
                                         />
                                         {quickAddData.client && <div className="text-[10px] font-black text-fb-blue uppercase tracking-tighter">Selected: {quickAddData.client}</div>}
                                         
-                                        {/* Autocomplete Recommendations */}
                                         {showRecommendations && (
                                             <div className="absolute top-full left-0 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl z-[120] py-2 animate-in fade-in duration-150 mt-1 max-h-[300px] overflow-y-auto">
                                                 <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">
@@ -254,7 +268,7 @@ export default function PaymentsList() {
                                                             <div className="text-[10px] font-bold text-gray-400 uppercase">{inv.client}</div>
                                                         </div>
                                                         <div className="text-right">
-                                                            <div className="text-sm font-black text-fb-navy">₱{inv.amount.toLocaleString()}</div>
+                                                            <div className="text-sm font-black text-fb-navy">₱{(inv.amount || 0).toLocaleString()}</div>
                                                             <div className="text-[9px] text-gray-300 font-bold uppercase tracking-tighter">Balance Due</div>
                                                         </div>
                                                     </div>
@@ -281,7 +295,7 @@ export default function PaymentsList() {
                                     </div>
                                 </td>
                                 <td className="p-4 flex flex-col gap-2">
-                                    <button onClick={handleSaveQuickAdd} className="bg-[#00a651] text-white p-2 rounded hover:bg-[#008541] shadow-sm transition-all"><Check size={18} strokeWidth={3} /></button>
+                                    <button onClick={handleSaveQuickAdd} disabled={isSaving} className="bg-[#00a651] text-white p-2 rounded hover:bg-[#008541] shadow-sm transition-all disabled:opacity-50"><Check size={18} strokeWidth={3} /></button>
                                     <button onClick={() => setIsQuickAddOpen(false)} className="text-gray-300 hover:text-red-500 transition-colors p-2"><X size={18} /></button>
                                 </td>
                             </tr>
@@ -302,7 +316,7 @@ export default function PaymentsList() {
                                     <div className="bg-[#e0f5e0] text-[#008541] text-[10px] font-black uppercase px-2 py-0.5 rounded border border-[#c1e8c1] inline-block mt-1">Confirmed</div>
                                 </td>
                                 <td className="p-4 text-right">
-                                    <button onClick={(e) => handleDelete(pay.id, e)} className="p-1.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
+                                    <button onClick={(e) => handleDelete(pay.id!, e)} className="p-1.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
                                 </td>
                             </tr>
                         ))}

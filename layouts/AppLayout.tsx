@@ -93,26 +93,26 @@ export default function AppLayout() {
                     <Menu size={24} />
                 </button>
                 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-6 relative" ref={profileRef}>
                     <Search size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
                     <Bell size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
                     <HelpCircle size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
-                    <div className="flex items-center gap-2 cursor-pointer" ref={profileRef} onClick={() => setIsProfileOpen(!isProfileOpen)}>
+                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsProfileOpen(!isProfileOpen)}>
                         <div className="w-8 h-8 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center font-bold text-[#0075dd] text-[11px]">JD</div>
                     </div>
 
                     {isProfileOpen && (
-                        <div className="absolute right-8 top-[56px] w-56 bg-white border border-gray-200 rounded shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                        <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-1 duration-150">
                              <div className="px-4 py-2 border-b border-gray-100 mb-1">
                                 <p className="text-xs font-bold text-[#002a63]">John Doe</p>
                                 <p className="text-[10px] text-gray-400">john.doe@demo.com</p>
                              </div>
-                             <div onClick={() => {navigate('/settings'); setIsProfileOpen(false);}} className="px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer flex items-center gap-2 text-[#002a63] font-bold">
+                             <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsProfileOpen(false); navigate('/settings'); }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer flex items-center gap-2 text-[#002a63] font-bold border-0 bg-transparent">
                                 <User size={14} className="text-gray-400" /> My Profile
-                             </div>
-                             <div onClick={logout} className="px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer text-red-500 font-bold flex items-center gap-2 border-t border-gray-50 mt-1">
+                             </button>
+                             <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsProfileOpen(false); logout(); navigate('/login'); }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer text-red-500 font-bold flex items-center gap-2 border-t border-gray-50 mt-1 border-0 bg-transparent">
                                 <LogOut size={14} /> Log Out
-                             </div>
+                             </button>
                         </div>
                     )}
                 </div>

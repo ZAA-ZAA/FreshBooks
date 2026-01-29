@@ -1,27 +1,20 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, FileText, ChevronDown, Receipt, Calculator, Pencil, X, Landmark, Gift, MailOpen } from 'lucide-react';
+import { Users, FileText, ChevronDown, Receipt, Calculator, Pencil, X, Landmark, Gift, MailOpen, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { dashboardApi, DashboardStats } from '../api';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [createNewOpen, setCreateNewOpen] = useState(false);
   const createNewRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const [stats, setStats] = useState({ received: 0, outstanding: 0, spent: 0, overdue: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ received: 0, outstanding: 0, spent: 0, overdue: 0 });
 
   useEffect(() => {
-    const invoices = JSON.parse(localStorage.getItem('fb_invoices') || '[]');
-    const expenses = JSON.parse(localStorage.getItem('fb_expenses') || '[]');
-    const payments = JSON.parse(localStorage.getItem('fb_payments') || '[]');
-
-    const received = payments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
-    const outstanding = invoices.filter(i => i.status !== 'Paid').reduce((acc, i) => acc + (parseFloat(i.amount) || 0), 0);
-    const overdue = invoices.filter(i => i.status === 'Overdue').reduce((acc, i) => acc + (parseFloat(i.amount) || 0), 0);
-    const spent = expenses.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
-
-    setStats({ received, outstanding, spent, overdue });
+    loadStats();
 
     const handleClickOutside = (event: MouseEvent) => {
         if (createNewRef.current && !createNewRef.current.contains(event.target)) {
@@ -31,6 +24,15 @@ export default function Dashboard() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const loadStats = async () => {
+    setIsLoading(true);
+    const response = await dashboardApi.getStats();
+    if (response.success && response.data) {
+      setStats(response.data);
+    }
+    setIsLoading(false);
+  };
 
   const revenueData = [
     { name: '0', val: 0, type: 'outstanding' },
@@ -47,6 +49,14 @@ export default function Dashboard() {
     { label: 'Expense', icon: <Receipt size={16} />, path: '/expenses/new' },
     { label: 'Estimate', icon: <Calculator size={16} />, path: '/estimates/new' },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-500 pb-10 font-sans">
@@ -95,7 +105,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mb-10">
-          <h2 className="text-xl font-bold text-[#2d3a4b] mb-8">Welcome, John! Here's how to get the most out of FreshBooks.</h2>
+          <h2 className="text-xl font-bold text-[#2d3a4b] mb-8">Welcome! Here's how to get the most out of FreshBooks.</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
               <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden flex flex-col relative group">

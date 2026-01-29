@@ -1,12 +1,16 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { X, CheckCircle2, ChevronRight, Bell, Clock, Globe, Paperclip, Save, Plus } from 'lucide-react';
+import { X, CheckCircle2, ChevronRight, Bell, Clock, Globe, Paperclip, Save, Plus, AlertCircle, Loader2 } from 'lucide-react';
+import { clientsApi, ClientData } from '../api';
 
 export default function ClientEdit() {
     const { id } = useParams();
     const navigate = useNavigate();
     const isEdit = !!id;
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -17,42 +21,68 @@ export default function ClientEdit() {
 
     useEffect(() => {
         if (isEdit) {
-            const stored = JSON.parse(localStorage.getItem('fb_clients') || '[]');
-            const found = stored.find(c => c.id === id);
-            if (found) {
-                const names = found.name.split(' ');
-                setFormData({
-                    firstName: names[0] || '',
-                    lastName: names.slice(1).join(' ') || '',
-                    company: found.company || '',
-                    email: found.email || '',
-                    phone: found.phone || ''
-                });
-            }
+            loadClient();
         }
     }, [id, isEdit]);
 
-    const handleSave = () => {
-        const stored = JSON.parse(localStorage.getItem('fb_clients') || '[]');
-        const clientData = {
-            id: isEdit ? id : Math.floor(Math.random() * 1000000).toString(),
-            name: `${formData.firstName} ${formData.lastName}`.trim(),
-            company: formData.company,
-            email: formData.email,
-            phone: formData.phone,
-            balance: 0
-        };
-
-        let updated;
-        if (isEdit) {
-            updated = stored.map(c => c.id === id ? clientData : c);
+    const loadClient = async () => {
+        setIsLoading(true);
+        const response = await clientsApi.getById(id!);
+        if (response.success && response.data) {
+            const client = response.data;
+            setFormData({
+                firstName: client.first_name || '',
+                lastName: client.last_name || '',
+                company: client.company || '',
+                email: client.email || '',
+                phone: client.phone || ''
+            });
         } else {
-            updated = [clientData, ...stored];
+            setError(response.error || 'Failed to load client');
+        }
+        setIsLoading(false);
+    };
+
+    const handleSave = async () => {
+        // Validation
+        if (!formData.company && !formData.firstName && !formData.lastName) {
+            setError('Either Company Name or First/Last Name is required');
+            return;
         }
 
-        localStorage.setItem('fb_clients', JSON.stringify(updated));
-        navigate(`/clients/${clientData.id}`);
+        setIsSaving(true);
+        setError(null);
+
+        const clientData: ClientData = {
+            company: formData.company || `${formData.firstName} ${formData.lastName}`.trim(),
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            email: formData.email,
+            phone: formData.phone
+        };
+
+        let response;
+        if (isEdit) {
+            response = await clientsApi.update(id!, clientData);
+        } else {
+            response = await clientsApi.create(clientData);
+        }
+
+        if (response.success && response.data) {
+            navigate(`/clients/${response.data.id}`);
+        } else {
+            setError(response.error || 'Failed to save client');
+        }
+        setIsSaving(false);
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="animate-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -63,12 +93,20 @@ export default function ClientEdit() {
                     <button onClick={() => navigate(-1)} className="font-bold text-fb-navy hover:underline">Cancel</button>
                     <button 
                         onClick={handleSave}
-                        className="bg-fb-green hover:brightness-110 text-white px-10 py-3 rounded-lg font-black text-xl shadow-lg transition-all"
+                        disabled={isSaving}
+                        className="bg-fb-green hover:brightness-110 text-white px-10 py-3 rounded-lg font-black text-xl shadow-lg transition-all disabled:opacity-50"
                     >
-                        Save
+                        {isSaving ? 'Saving...' : 'Save'}
                     </button>
                 </div>
             </div>
+
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+                    <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                    <p className="text-red-700 text-sm">{error}</p>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                 {/* Main Form */}
@@ -98,17 +136,19 @@ export default function ClientEdit() {
                     </div>
 
                     <div className="mb-8">
-                        <label className="block text-sm font-bold text-gray-500 mb-2">Company Name</label>
+                        <label className="block text-sm font-bold text-gray-500 mb-2">Company Name <span className="text-red-500">*</span></label>
                         <input 
                             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-fb-blue outline-none transition-all" 
                             value={formData.company}
                             onChange={e => setFormData({...formData, company: e.target.value})}
+                            placeholder="Required"
                         />
                     </div>
 
                     <div className="mb-8">
                         <label className="block text-sm font-bold text-gray-500 mb-2">Email Address</label>
                         <input 
+                            type="email"
                             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-fb-blue outline-none transition-all" 
                             value={formData.email}
                             onChange={e => setFormData({...formData, email: e.target.value})}

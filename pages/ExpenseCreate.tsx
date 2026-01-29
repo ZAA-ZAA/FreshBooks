@@ -4,8 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
     X, CheckCircle2, ChevronDown, ChevronRight, Image as ImageIcon, 
     Calendar, Receipt, Tag, Briefcase, Smile, Home, Pizza,
-    Clock, Globe, RotateCcw, UserPlus, Info, Users
+    Clock, Globe, RotateCcw, UserPlus, Info, Users, AlertCircle, Loader2
 } from 'lucide-react';
+import { expensesApi, clientsApi, ExpenseData, ClientData } from '../api';
 
 const CATEGORIES = [
     { name: 'Personal', icon: <Smile size={18} className="text-emerald-500" /> },
@@ -24,31 +25,44 @@ export default function ExpenseCreate() {
     const [amount, setAmount] = useState('0.00');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('Rent or Lease');
-    const [selectedClient, setSelectedClient] = useState(null);
+    const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
     
-    const [existingClients, setExistingClients] = useState([]);
+    const [existingClients, setExistingClients] = useState<ClientData[]>([]);
     const [showClientMenu, setShowClientMenu] = useState(false);
     const [showCategoryMenu, setShowCategoryMenu] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     
     const categoryRef = useRef(null);
     const clientRef = useRef(null);
 
     useEffect(() => {
-        const clients = JSON.parse(localStorage.getItem('fb_clients') || '[]');
-        setExistingClients(clients);
+        loadInitialData();
+    }, [id, isEdit]);
+
+    const loadInitialData = async () => {
+        setIsLoading(true);
+        
+        // Load clients
+        const clientsResponse = await clientsApi.getAll();
+        if (clientsResponse.success && clientsResponse.data) {
+            setExistingClients(clientsResponse.data);
+        }
 
         if (isEdit) {
-            const stored = JSON.parse(localStorage.getItem('fb_expenses') || '[]');
-            const found = stored.find(e => e.id === id);
-            if (found) {
-                setMerchant(found.merchant);
-                setDate(found.date);
-                setAmount(found.amount.toString());
-                setCategory(found.category);
-                setDescription(found.description || '');
-                if (found.client) {
-                    const matched = clients.find(c => c.company === found.client);
+            const response = await expensesApi.getById(id!);
+            if (response.success && response.data) {
+                const exp = response.data;
+                setMerchant(exp.merchant || '');
+                setDate(exp.date || new Date().toISOString().split('T')[0]);
+                setAmount(exp.amount?.toString() || '0.00');
+                setCategory(exp.category || 'Rent or Lease');
+                setDescription(exp.description || '');
+                
+                if (exp.client_id && clientsResponse.data) {
+                    const matched = clientsResponse.data.find(c => c.id === exp.client_id);
                     if (matched) setSelectedClient(matched);
                 }
             }
@@ -63,40 +77,67 @@ export default function ExpenseCreate() {
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
+        
+        setIsLoading(false);
+        
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [id, isEdit]);
+    };
 
-    const handleSave = () => {
-        const stored = JSON.parse(localStorage.getItem('fb_expenses') || '[]');
-        const expenseData = {
-            id: isEdit ? id : Date.now().toString(),
+    const handleSave = async () => {
+        // Validation
+        if (!merchant) {
+            setError('Merchant name is required');
+            return;
+        }
+        if (!amount || parseFloat(amount) <= 0) {
+            setError('Valid amount is required');
+            return;
+        }
+
+        setIsSaving(true);
+        setError(null);
+
+        const expenseData: ExpenseData = {
             merchant: merchant || 'New Merchant',
             date: date,
             amount: parseFloat(amount) || 0,
             category: category,
             description: description,
-            client: selectedClient ? selectedClient.company : 'Internal',
+            client_id: selectedClient?.id || undefined,
             status: 'Draft'
         };
 
-        let updated;
+        let response;
         if (isEdit) {
-            updated = stored.map(e => e.id === id ? expenseData : e);
+            response = await expensesApi.update(id!, expenseData);
         } else {
-            updated = [expenseData, ...stored];
+            response = await expensesApi.create(expenseData);
         }
 
-        localStorage.setItem('fb_expenses', JSON.stringify(updated));
-        setShowToast(true);
-        setTimeout(() => navigate('/expenses'), 1500);
+        if (response.success) {
+            setShowToast(true);
+            setTimeout(() => navigate('/expenses'), 1500);
+        } else {
+            setError(response.error || 'Failed to save expense');
+        }
+
+        setIsSaving(false);
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen">
             <div className="absolute inset-0 bg-[#d3dae3] -z-10 -m-8 min-h-[calc(100%+4rem)]"></div>
 
             {showToast && (
-                <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-[#28303f] text-white px-8 py-3 rounded shadow-2xl flex items-center animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] bg-[#28303f] text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ring-2 ring-black/10">
                     <CheckCircle2 className="text-fb-green mr-3" size={24} />
                     <span className="font-bold">Expense saved</span>
                 </div>
@@ -113,12 +154,21 @@ export default function ExpenseCreate() {
                             <button onClick={() => navigate(-1)} className="font-bold text-fb-navy hover:underline">Cancel</button>
                             <button 
                                 onClick={handleSave}
-                                className="px-10 py-3 bg-fb-green hover:brightness-110 text-white rounded-lg font-black text-xl shadow-lg transition-all"
+                                disabled={isSaving}
+                                className="px-10 py-3 bg-fb-green hover:brightness-110 text-white rounded-lg font-black text-xl shadow-lg transition-all disabled:opacity-50"
                             >
-                                Save
+                                {isSaving ? 'Saving...' : 'Save'}
                             </button>
                         </div>
                     </div>
+
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+                            <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                            <p className="text-red-700 text-sm">{error}</p>
+                            <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600"><X size={18} /></button>
+                        </div>
+                    )}
 
                     <div className="flex flex-col lg:flex-row gap-12 items-start">
                         <div className="flex-1 bg-white rounded-lg shadow-2xl p-16 relative animate-in zoom-in-95 duration-300 w-full min-h-[700px] border-t-8 border-t-fb-green">
@@ -162,7 +212,7 @@ export default function ExpenseCreate() {
                                 </div>
 
                                 <div>
-                                    <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="Add merchant" className="text-5xl font-black text-fb-navy border-none p-0 w-full outline-none placeholder:text-gray-100" />
+                                    <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="Add merchant *" className="text-5xl font-black text-fb-navy border-none p-0 w-full outline-none placeholder:text-gray-100" />
                                 </div>
 
                                 <div>
@@ -189,7 +239,7 @@ export default function ExpenseCreate() {
                                                 <Users className="text-gray-400 group-hover:text-fb-blue mt-1" size={20} />
                                                 <div>
                                                     <div className="font-bold text-[13px] text-fb-navy">Assign to Client</div>
-                                                    <div className="text-[11px] text-fb-blue font-bold mt-1 uppercase tracking-widest">{selectedClient ? selectedClient.company : 'NONE'}</div>
+                                                    <div className="text-[11px] text-fb-blue font-bold mt-1 uppercase tracking-widest">{selectedClient ? selectedClient.company : 'NONE (Internal)'}</div>
                                                 </div>
                                             </div>
                                             <ChevronRight className="text-gray-300" size={16} />
@@ -201,7 +251,7 @@ export default function ExpenseCreate() {
                                                         {c.company}
                                                     </div>
                                                 ))}
-                                                <div onClick={() => { setSelectedClient(null); setShowClientMenu(false); }} className="px-5 py-3 hover:bg-fb-gray cursor-pointer font-bold text-sm text-gray-400">Clear Assignment</div>
+                                                <div onClick={() => { setSelectedClient(null); setShowClientMenu(false); }} className="px-5 py-3 hover:bg-fb-gray cursor-pointer font-bold text-sm text-gray-400">Clear Assignment (Internal)</div>
                                             </div>
                                         )}
                                     </div>

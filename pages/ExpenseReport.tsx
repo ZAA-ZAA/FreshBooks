@@ -3,8 +3,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
     ChevronLeft, ChevronDown, Printer, Download, X, 
-    Filter, FileText, ChevronRight, Home, Briefcase, Receipt, Smile
+    Filter, FileText, ChevronRight, Home, Briefcase, Receipt, Smile, Loader2
 } from 'lucide-react';
+import { expensesApi, ExpenseData } from '../api';
 
 const CATEGORY_ICONS = {
     'Personal': <Smile size={16} className="text-emerald-500" />,
@@ -17,16 +18,24 @@ const CATEGORY_ICONS = {
 export default function ExpenseReport() {
     const navigate = useNavigate();
     const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-    const [expenses, setExpenses] = useState([]);
+    const [expenses, setExpenses] = useState<ExpenseData[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     
-    // Filters
     const [dateRange, setDateRange] = useState('This Year');
     const [categoryFilter, setCategoryFilter] = useState('All Categories');
 
     useEffect(() => {
-        const stored = JSON.parse(localStorage.getItem('fb_expenses') || '[]');
-        setExpenses(stored);
+        loadExpenses();
     }, []);
+
+    const loadExpenses = async () => {
+        setIsLoading(true);
+        const response = await expensesApi.getAll();
+        if (response.success && response.data) {
+            setExpenses(response.data);
+        }
+        setIsLoading(false);
+    };
 
     const reportData = useMemo(() => {
         let filtered = expenses;
@@ -35,15 +44,24 @@ export default function ExpenseReport() {
         }
 
         const grouped = filtered.reduce((acc, exp) => {
-            if (!acc[exp.category]) acc[exp.category] = { name: exp.category, items: [], total: 0 };
-            acc[exp.category].items.push(exp);
-            acc[exp.category].total += parseFloat(exp.amount) || 0;
+            const cat = exp.category || 'Uncategorized';
+            if (!acc[cat]) acc[cat] = { name: cat, items: [], total: 0 };
+            acc[cat].items.push(exp);
+            acc[cat].total += parseFloat(exp.amount as any) || 0;
             return acc;
         }, {});
 
-        const totalExpenses = filtered.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+        const totalExpenses = filtered.reduce((acc, curr) => acc + (parseFloat(curr.amount as any) || 0), 0);
         return { groups: Object.values(grouped), totalExpenses };
     }, [expenses, categoryFilter]);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-screen bg-white animate-in fade-in duration-500 font-sans">
@@ -88,7 +106,7 @@ export default function ExpenseReport() {
                             </table>
                         </div>
 
-                        {reportData.groups.map(group => (
+                        {(reportData.groups as any[]).length > 0 ? (reportData.groups as any[]).map(group => (
                             <div key={group.name} className="mb-16">
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="p-1 bg-gray-50 rounded">
@@ -111,7 +129,7 @@ export default function ExpenseReport() {
                                             <tr key={exp.id} className="hover:bg-gray-50 transition-colors">
                                                 <td className="py-4 pl-10">
                                                     <div className="font-bold text-fb-navy">{exp.merchant}</div>
-                                                    <div className="text-gray-400 text-[10px]">{exp.client || '—'}</div>
+                                                    <div className="text-gray-400 text-[10px]">{exp.client_name || '—'}</div>
                                                 </td>
                                                 <td className="py-4">
                                                     <div className="font-medium text-gray-600">{exp.date}</div>
@@ -134,7 +152,12 @@ export default function ExpenseReport() {
                                     </tfoot>
                                 </table>
                             </div>
-                        ))}
+                        )) : (
+                            <div className="py-32 text-center">
+                                <FileText size={64} className="text-gray-100 mx-auto mb-6" />
+                                <p className="text-xl font-black text-gray-300 italic tracking-tighter">No expenses found.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

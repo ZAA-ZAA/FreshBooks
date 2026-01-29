@@ -1,7 +1,8 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, CheckCircle2, X, Info, Calendar as CalendarIcon, Search } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, CheckCircle2, X, Info, Calendar as CalendarIcon, Search, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { clientsApi, invoicesApi, estimatesApi, ClientData, InvoiceData, InvoiceItemData } from '../api';
 
 const THEME_COLORS = [
   { id: 'purple', value: '#6d28d9' },
@@ -41,11 +42,17 @@ export default function InvoiceCreate() {
   const [docNumber, setDocNumber] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [reference, setReference] = useState('');
-  const [client, setClient] = useState<any>(null); 
-  const [items, setItems] = useState<any[]>([{ id: '1', name: '', description: '', rate: 0, qty: 1, tax: 0 }]);
+  const [client, setClient] = useState<ClientData | null>(null); 
+  const [clients, setClients] = useState<ClientData[]>([]);
+  const [items, setItems] = useState<InvoiceItemData[]>([{ id: '1', name: '', description: '', rate: 0, qty: 1, tax: 0 }]);
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
   const [discount, setDiscount] = useState(0);
+
+  // Loading & Error
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Modals / UI
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -72,64 +79,133 @@ export default function InvoiceCreate() {
   const clientDropdownRef = useRef(null);
 
   useEffect(() => {
-    const clients = JSON.parse(localStorage.getItem('fb_clients') || '[]');
-    if (isNew) {
-        const storageKey = isEstimate ? 'fb_estimates' : 'fb_invoices';
-        const documents = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        setDocNumber((documents.length + 1).toString().padStart(7, '0'));
-    } else if (id) {
-        const storageKey = isEstimate ? 'fb_estimates' : 'fb_invoices';
-        const doc = JSON.parse(localStorage.getItem(storageKey) || '[]').find(d => d.id === id);
-        if (doc) {
-            setDocNumber(doc.number); setIssueDate(doc.date);
-            setItems(doc.items || items); setNotes(doc.notes || '');
-            setTerms(doc.terms || ''); setReference(doc.reference || '');
-            setDiscount(doc.discount || 0);
-            const matchedClient = clients.find(c => c.company === doc.client);
-            if (matchedClient) setClient(matchedClient);
-        }
+    loadInitialData();
+  }, [id, isNew]);
+
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    
+    // Load clients
+    const clientsResponse = await clientsApi.getAll();
+    if (clientsResponse.success && clientsResponse.data) {
+      setClients(clientsResponse.data);
     }
 
+    if (isNew) {
+      // Get next document number
+      const api = isEstimate ? estimatesApi : invoicesApi;
+      const numberResponse = await api.getNextNumber();
+      if (numberResponse.success && numberResponse.data) {
+        setDocNumber(numberResponse.data.number);
+      }
+    } else if (id) {
+      // Load existing document
+      const api = isEstimate ? estimatesApi : invoicesApi;
+      const docResponse = await api.getById(id);
+      if (docResponse.success && docResponse.data) {
+        const doc = docResponse.data;
+        setDocNumber(doc.number || '');
+        setIssueDate(doc.date || new Date().toISOString().split('T')[0]);
+        setItems(doc.items || [{ id: '1', name: '', description: '', rate: 0, qty: 1, tax: 0 }]);
+        setNotes(doc.notes || '');
+        setTerms(doc.terms || '');
+        setReference(doc.reference || '');
+        setDiscount(doc.discount || 0);
+        
+        // Find matching client
+        if (doc.client_id && clientsResponse.data) {
+          const matchedClient = clientsResponse.data.find(c => c.id === doc.client_id);
+          if (matchedClient) setClient(matchedClient);
+        }
+      }
+    }
+
+    // Handle click outside
     const handleClickOutside = (e: MouseEvent) => {
         if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) {
             setShowClientDropdown(false);
         }
     };
     document.addEventListener("mousedown", handleClickOutside);
+    
+    setIsLoading(false);
+    
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [id, isNew]);
+  };
 
-  const subtotal = items.reduce((acc, item) => acc + (item.rate * item.qty), 0);
-  const totalTax = items.reduce((acc, item) => acc + ((item.rate * item.qty) * (item.tax / 100)), 0);
+  const subtotal = items.reduce((acc, item) => acc + ((item.rate || 0) * (item.qty || 1)), 0);
+  const totalTax = items.reduce((acc, item) => acc + (((item.rate || 0) * (item.qty || 1)) * ((item.tax || 0) / 100)), 0);
   const discountAmount = (subtotal * (discount / 100));
   const total = subtotal + totalTax - discountAmount;
 
-  const handleSave = (status: string = 'Draft') => {
-      const storageKey = isEstimate ? 'fb_estimates' : 'fb_invoices';
-      const storedDocs = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      const docData = {
-          id: id || Date.now().toString(), number: docNumber, client: client ? client.company : 'Unknown Client',
-          date: issueDate, amount: total, status: status,
-          items, notes, terms, reference, discount
-      };
-      const updatedDocs = id && !isNew ? storedDocs.map(d => d.id === id ? docData : d) : [docData, ...storedDocs];
-      localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+  const handleSave = async (status: string = 'Draft') => {
+    // Validation: Client is required
+    if (!client) {
+      setError(`Please select a client before saving the ${documentType.toLowerCase()}.`);
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    const docData = {
+      client_id: client.id,
+      number: docNumber,
+      date: issueDate,
+      items: items.filter(i => i.name || i.rate), // Filter empty items
+      notes,
+      terms,
+      reference,
+      discount,
+      status
+    };
+
+    const api = isEstimate ? estimatesApi : invoicesApi;
+    let response;
+
+    if (id && !isNew) {
+      response = await api.update(id, docData);
+    } else {
+      response = await api.create(docData);
+    }
+
+    if (response.success) {
       setShowToast(true);
       setTimeout(() => navigate(isEstimate ? '/estimates' : '/invoices'), 1000);
+    } else {
+      setError(response.error || `Failed to save ${documentType.toLowerCase()}`);
+    }
+
+    setIsSaving(false);
   };
 
-  const handleCreateClient = (newClient) => {
-    const clients = JSON.parse(localStorage.getItem('fb_clients') || '[]');
-    const clientToAdd = { ...newClient, id: Date.now().toString(), balance: 0 };
-    localStorage.setItem('fb_clients', JSON.stringify([clientToAdd, ...clients]));
-    setClient(clientToAdd);
-    setShowNewClientModal(false);
+  const handleCreateClient = async (newClientData: any) => {
+    const response = await clientsApi.create({
+      company: newClientData.company,
+      first_name: newClientData.firstName || '',
+      last_name: newClientData.lastName || '',
+      email: newClientData.email || ''
+    });
+
+    if (response.success && response.data) {
+      setClients([response.data, ...clients]);
+      setClient(response.data);
+      setShowNewClientModal(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f7f9] -m-10 p-10 transition-all duration-500" style={{ fontFamily }}>
         {showToast && (
-            <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[200] bg-fb-slate text-white px-6 py-2.5 rounded shadow-xl flex items-center animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] bg-fb-slate text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ring-2 ring-black/10">
                 <CheckCircle2 className="text-fb-green mr-2" size={16} />
                 <span className="text-sm font-bold">{documentType} saved successfully</span>
             </div>
@@ -142,10 +218,21 @@ export default function InvoiceCreate() {
                     <h2 className="text-4xl font-black text-fb-navy tracking-tight">{isNew ? `New ${documentType}` : `Edit ${documentType}`}</h2>
                     <div className="flex items-center gap-4">
                         <button onClick={() => navigate(-1)} className="text-sm font-bold text-fb-navy hover:underline px-4">Cancel</button>
-                        <button onClick={() => handleSave('Draft')} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base">Save</button>
-                        <button onClick={() => handleSave('Sent')} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base">Send To...</button>
+                        <button onClick={() => handleSave('Draft')} disabled={isSaving} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base disabled:opacity-50">
+                            {isSaving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button onClick={() => handleSave('Sent')} disabled={isSaving} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base disabled:opacity-50">Send To...</button>
                     </div>
                 </div>
+
+                {/* Error Alert */}
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+                        <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                        <p className="text-red-700 text-sm">{error}</p>
+                        <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600"><X size={18} /></button>
+                    </div>
+                )}
 
                 {/* Document Canvas */}
                 <div className={`bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden relative min-h-[1000px] transition-all duration-500 ${template === 'Modern' ? 'pt-0' : 'p-16'}`}>
@@ -184,7 +271,7 @@ export default function InvoiceCreate() {
                         {/* Prepared For & Meta */}
                         <div className="grid grid-cols-2 gap-20 mb-16">
                             <div className="relative" ref={clientDropdownRef}>
-                                <label className="text-[10px] font-black text-red-500 uppercase block mb-4 tracking-[0.25em]">Prepared For</label>
+                                <label className="text-[10px] font-black text-red-500 uppercase block mb-4 tracking-[0.25em]">Prepared For *</label>
                                 {client ? (
                                     <div className="p-5 border border-blue-100 bg-blue-50/20 rounded-2xl group relative transition-all hover:border-fb-blue">
                                         <p className="font-black text-fb-navy text-2xl tracking-tighter mb-1">{client.company}</p>
@@ -196,9 +283,9 @@ export default function InvoiceCreate() {
                                     <div className="relative">
                                         <div 
                                             onClick={() => setShowClientDropdown(!showClientDropdown)} 
-                                            className={`border rounded-2xl px-5 py-4 text-sm font-bold transition-all flex justify-between items-center cursor-pointer ${showClientDropdown ? 'border-fb-blue ring-4 ring-blue-50' : 'border-gray-200 hover:border-fb-blue bg-white'}`}
+                                            className={`border rounded-2xl px-5 py-4 text-sm font-bold transition-all flex justify-between items-center cursor-pointer ${showClientDropdown ? 'border-fb-blue ring-4 ring-blue-50' : 'border-red-300 hover:border-fb-blue bg-white'}`}
                                         >
-                                            <span className="text-gray-400">Select a Client</span>
+                                            <span className="text-red-400">Select a Client (Required)</span>
                                             <ChevronDown size={20} className={`text-gray-300 transition-transform ${showClientDropdown ? 'rotate-180' : ''}`} />
                                         </div>
                                         <button onClick={() => setShowNewClientModal(true)} className="flex items-center text-fb-blue font-black text-[11px] uppercase tracking-widest hover:underline mt-4 ml-1">
@@ -214,12 +301,15 @@ export default function InvoiceCreate() {
                                             <input placeholder="Search clients..." className="bg-transparent border-none text-xs font-bold outline-none flex-1 focus:ring-0" />
                                         </div>
                                         <div className="max-h-64 overflow-y-auto py-2">
-                                            {JSON.parse(localStorage.getItem('fb_clients') || '[]').map(c => (
-                                                <div key={c.id} onClick={() => { setClient(c); setShowClientDropdown(false); }} className="px-5 py-3 hover:bg-fb-gray cursor-pointer border-b border-gray-50 last:border-0 group flex flex-col">
+                                            {clients.map(c => (
+                                                <div key={c.id} onClick={() => { setClient(c); setShowClientDropdown(false); setError(null); }} className="px-5 py-3 hover:bg-fb-gray cursor-pointer border-b border-gray-50 last:border-0 group flex flex-col">
                                                     <span className="font-black text-fb-navy group-hover:text-fb-blue transition-colors">{c.company}</span>
                                                     <span className="text-[10px] text-gray-400 font-bold uppercase">{c.name}</span>
                                                 </div>
                                             ))}
+                                            {clients.length === 0 && (
+                                                <div className="px-5 py-6 text-center text-gray-400 text-sm">No clients found. Create one first.</div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -228,23 +318,20 @@ export default function InvoiceCreate() {
                             <div className="space-y-6 pt-4">
                                 <div className="flex justify-between items-end border-b border-gray-100 pb-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{documentType} #</label>
-                                    {/* Presentational: No border, padding, or ring */}
                                     <input value={docNumber} readOnly className="text-right text-sm font-black text-fb-navy bg-transparent outline-none w-32 border-none p-0 focus:ring-0" />
                                 </div>
                                 <div className="flex justify-between items-end border-b border-gray-100 pb-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date Issued</label>
-                                    {/* Presentational: No border, padding, or ring */}
                                     <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className="text-right text-sm font-black text-fb-navy bg-transparent cursor-pointer outline-none border-none p-0 focus:ring-0" />
                                 </div>
                                 <div className="flex justify-between items-end border-b border-gray-100 pb-3 group">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reference</label>
-                                    {/* Presentational: No border, padding, or ring */}
                                     <input value={reference} onChange={e => setReference(e.target.value)} placeholder="e.g. PO #" className="text-right text-sm font-bold text-fb-navy bg-transparent placeholder:text-gray-100 outline-none border-none p-0 focus:ring-0 group-hover:placeholder:text-gray-300 transition-all" />
                                 </div>
                             </div>
                         </div>
 
-                        {/* Presentational Items Table */}
+                        {/* Items Table */}
                         <div className="mt-16">
                             <table className="w-full text-xs border-collapse">
                                 <thead>
@@ -292,7 +379,7 @@ export default function InvoiceCreate() {
                                                 />
                                             </td>
                                             <td className="py-6 text-right font-black text-fb-navy text-sm relative">
-                                                ₱{(item.rate * item.qty).toLocaleString()}
+                                                ₱{((item.rate || 0) * (item.qty || 1)).toLocaleString()}
                                                 <div className="absolute right-[-60px] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                                     <button onClick={() => setItems(items.filter(i => i.id !== item.id))} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                                                 </div>
@@ -421,7 +508,9 @@ export default function InvoiceCreate() {
                 </div>
 
                 <div className="pt-10 border-t border-gray-100 space-y-6">
-                    <button onClick={() => handleSave('Draft')} className="w-full bg-fb-navy text-white py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-xs shadow-xl shadow-fb-navy/20 hover:brightness-110 active:scale-95 transition-all">Save {documentType}</button>
+                    <button onClick={() => handleSave('Draft')} disabled={isSaving} className="w-full bg-fb-navy text-white py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-xs shadow-xl shadow-fb-navy/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+                        {isSaving ? 'Saving...' : `Save ${documentType}`}
+                    </button>
                 </div>
             </aside>
         </div>
@@ -471,25 +560,27 @@ export default function InvoiceCreate() {
                         </div>
                         <div className="space-y-8">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Organization Name</label>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Organization Name <span className="text-red-500">*</span></label>
                                 <input id="new-client-company" className="w-full border border-gray-200 rounded-2xl px-6 py-4 font-black text-fb-navy text-xl focus:ring-4 ring-blue-50 transition-all" placeholder="Acme Corp" />
                             </div>
                             <div className="grid grid-cols-2 gap-8">
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">First Name</label>
-                                    <input className="w-full border border-gray-200 rounded-2xl px-6 py-4 font-bold text-fb-navy focus:ring-4 ring-blue-50" />
+                                    <input id="new-client-firstname" className="w-full border border-gray-200 rounded-2xl px-6 py-4 font-bold text-fb-navy focus:ring-4 ring-blue-50" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Last Name</label>
-                                    <input className="w-full border border-gray-200 rounded-2xl px-6 py-4 font-bold text-fb-navy focus:ring-4 ring-blue-50" />
+                                    <input id="new-client-lastname" className="w-full border border-gray-200 rounded-2xl px-6 py-4 font-bold text-fb-navy focus:ring-4 ring-blue-50" />
                                 </div>
                             </div>
                         </div>
                         <div className="flex justify-end gap-10 mt-16 pt-10 border-t border-gray-100">
                              <button onClick={() => setShowNewClientModal(false)} className="text-xs font-black text-gray-400 hover:text-fb-navy uppercase tracking-[0.2em]">Discard</button>
                              <button onClick={() => {
-                                 const comp = document.getElementById('new-client-company')?.value;
-                                 if (comp) handleCreateClient({ company: comp, name: comp, email: '' });
+                                 const comp = (document.getElementById('new-client-company') as HTMLInputElement)?.value;
+                                 const firstName = (document.getElementById('new-client-firstname') as HTMLInputElement)?.value;
+                                 const lastName = (document.getElementById('new-client-lastname') as HTMLInputElement)?.value;
+                                 if (comp) handleCreateClient({ company: comp, firstName, lastName });
                              }} className="bg-fb-green text-white px-12 py-4 rounded-2xl font-black shadow-xl shadow-fb-green/20 hover:brightness-110 transition-all">Create Record</button>
                         </div>
                     </div>

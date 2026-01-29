@@ -3,33 +3,29 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
     ChevronLeft, ChevronDown, Printer, Download, Search, X, 
-    Calendar, Filter, FileText, MoreHorizontal, Send, ChevronRight
+    Calendar, Filter, FileText, MoreHorizontal, Send, ChevronRight, Loader2
 } from 'lucide-react';
+import { invoicesApi, clientsApi, InvoiceData, ClientData } from '../api';
 
 export default function InvoiceDetailsReport() {
     const navigate = useNavigate();
     
-    // UI State
     const [isFiltersOpen, setIsFiltersOpen] = useState(false);
     const [showActions, setShowActions] = useState(false);
     
-    // Filters State
     const [dateRange, setDateRange] = useState('This Year');
     const [dateType, setDateType] = useState('Issue Date');
     const [clientFilter, setClientFilter] = useState('All Clients');
     const [statusFilter, setStatusFilter] = useState('All Statuses');
     
-    // Data State
-    const [invoices, setInvoices] = useState([]);
-    const [clients, setClients] = useState([]);
+    const [invoices, setInvoices] = useState<InvoiceData[]>([]);
+    const [clients, setClients] = useState<ClientData[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const actionsRef = useRef(null);
 
     useEffect(() => {
-        const storedInvoices = JSON.parse(localStorage.getItem('fb_invoices') || '[]');
-        const storedClients = JSON.parse(localStorage.getItem('fb_clients') || '[]');
-        setInvoices(storedInvoices);
-        setClients(storedClients);
+        loadData();
 
         const handleClickOutside = (event) => {
             if (actionsRef.current && !actionsRef.current.contains(event.target)) {
@@ -40,6 +36,17 @@ export default function InvoiceDetailsReport() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    const loadData = async () => {
+        setIsLoading(true);
+        const [invoicesRes, clientsRes] = await Promise.all([
+            invoicesApi.getAll(),
+            clientsApi.getAll()
+        ]);
+        if (invoicesRes.success && invoicesRes.data) setInvoices(invoicesRes.data);
+        if (clientsRes.success && clientsRes.data) setClients(clientsRes.data);
+        setIsLoading(false);
+    };
+
     const resetFilters = () => {
         setDateRange('This Year');
         setDateType('Issue Date');
@@ -47,40 +54,37 @@ export default function InvoiceDetailsReport() {
         setStatusFilter('All Statuses');
     };
 
-    // Memoized Grouping and Calculations
     const reportData = useMemo(() => {
         let filtered = invoices;
 
-        // Apply Status Filter
         if (statusFilter !== 'All Statuses') {
             filtered = filtered.filter(i => i.status === statusFilter);
         }
 
-        // Apply Client Filter
         if (clientFilter !== 'All Clients') {
             filtered = filtered.filter(i => i.client === clientFilter);
         }
 
-        // Group by Client
         const grouped = filtered.reduce((acc, inv) => {
-            if (!acc[inv.client]) {
-                acc[inv.client] = {
-                    name: inv.client,
+            const clientName = inv.client || 'Unknown Client';
+            if (!acc[clientName]) {
+                acc[clientName] = {
+                    name: clientName,
                     invoices: [],
                     totalInvoiced: 0,
                     amountPaid: 0
                 };
             }
-            acc[inv.client].invoices.push(inv);
-            acc[inv.client].totalInvoiced += parseFloat(inv.amount) || 0;
+            acc[clientName].invoices.push(inv);
+            acc[clientName].totalInvoiced += parseFloat(inv.total as any) || 0;
             if (inv.status === 'Paid') {
-                acc[inv.client].amountPaid += parseFloat(inv.amount) || 0;
+                acc[clientName].amountPaid += parseFloat(inv.total as any) || 0;
             }
             return acc;
         }, {});
 
-        const grandTotal = filtered.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-        const grandPaid = filtered.filter(i => i.status === 'Paid').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+        const grandTotal = filtered.reduce((acc, curr) => acc + (parseFloat(curr.total as any) || 0), 0);
+        const grandPaid = filtered.filter(i => i.status === 'Paid').reduce((acc, curr) => acc + (parseFloat(curr.total as any) || 0), 0);
 
         return {
             clients: Object.values(grouped),
@@ -95,9 +99,16 @@ export default function InvoiceDetailsReport() {
         setShowActions(false);
     };
 
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[#0075dd]" size={32} />
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col min-h-screen bg-white animate-in fade-in duration-500 font-sans">
-            {/* Main Nav Header */}
             <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-[60] print:hidden">
                 <div className="flex flex-col">
                     <Link to="/reports" className="flex items-center gap-1 text-xs font-bold text-fb-blue hover:underline mb-2">
@@ -125,11 +136,9 @@ export default function InvoiceDetailsReport() {
             </div>
 
             <div className="flex flex-1 overflow-hidden relative">
-                {/* Main Content Area */}
                 <div className="flex-1 overflow-y-auto custom-scroll p-12 bg-[#f5f7f9] print:bg-white print:p-0">
                     <div className="max-w-[900px] mx-auto bg-white rounded-sm border border-gray-200 shadow-sm p-16 print:border-none print:shadow-none min-h-[1000px]">
                         
-                        {/* Report Inner Header */}
                         <div className="mb-12 border-b-4 border-[#0075dd] pb-8">
                             <h2 className="text-4xl font-black text-[#0075dd] mb-4 tracking-tighter">Invoice Details</h2>
                             <div className="space-y-1 text-xs text-gray-500 font-bold">
@@ -140,7 +149,6 @@ export default function InvoiceDetailsReport() {
                             </div>
                         </div>
 
-                        {/* Grand Summary Table */}
                         <div className="mb-16">
                             <table className="w-full text-xs font-bold text-gray-600">
                                 <tbody>
@@ -167,8 +175,7 @@ export default function InvoiceDetailsReport() {
                             </table>
                         </div>
 
-                        {/* Client Groups */}
-                        {reportData.clients.length > 0 ? reportData.clients.map(client => (
+                        {(reportData.clients as any[]).length > 0 ? (reportData.clients as any[]).map(client => (
                             <div key={client.name} className="mb-24">
                                 <div className="flex items-center gap-3 mb-8">
                                     <div className="w-10 h-10 rounded-full bg-fb-yellow/20 text-fb-navy font-black text-xs flex items-center justify-center border border-fb-yellow/30 uppercase">
@@ -227,12 +234,12 @@ export default function InvoiceDetailsReport() {
                                             <tbody className="divide-y divide-gray-50 border-b border-gray-100">
                                                 {inv.items?.map((item, idx) => (
                                                     <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="py-5 pl-10 font-bold text-fb-navy max-w-xs">{item.name || '—'}</td>
-                                                        <td className="py-5 text-right font-medium">₱{parseFloat(item.rate).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                                        <td className="py-5 text-right font-medium">{item.qty}</td>
+                                                        <td className="py-5 pl-10 font-bold text-fb-navy max-w-xs">{item.description || '—'}</td>
+                                                        <td className="py-5 text-right font-medium">₱{parseFloat(item.rate || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                                        <td className="py-5 text-right font-medium">{item.quantity}</td>
                                                         <td className="py-5 text-right font-medium">0.00</td>
                                                         <td className="py-5 text-right font-medium">0.00</td>
-                                                        <td className="py-5 text-right pr-2 font-black text-fb-navy">₱{(item.rate * item.qty).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                                        <td className="py-5 text-right pr-2 font-black text-fb-navy">₱{((item.rate || 0) * (item.quantity || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -240,13 +247,13 @@ export default function InvoiceDetailsReport() {
                                                 <tr className="border-t border-gray-100">
                                                     <td colSpan={4}></td>
                                                     <td className="py-4 text-right font-black text-[#002a63] text-xs">Invoice Total</td>
-                                                    <td className="py-4 text-right pr-2 font-black text-[#002a63] text-xs">{inv.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                                    <td className="py-4 text-right pr-2 font-black text-[#002a63] text-xs">{(inv.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                                 </tr>
                                                 <tr className="border-t-2 border-gray-100">
                                                     <td colSpan={4}></td>
                                                     <td className="py-4 text-right font-black text-[#002a63] uppercase tracking-widest text-[9px]">Amount Due</td>
                                                     <td className="py-4 text-right pr-2 font-black text-[#002a63]">
-                                                        <div className="text-sm">₱{inv.status === 'Paid' ? '0.00' : inv.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                                        <div className="text-sm">₱{inv.status === 'Paid' ? '0.00' : (inv.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                                         <div className="text-[9px] text-gray-400 uppercase leading-none mt-1">PHP</div>
                                                     </td>
                                                 </tr>
@@ -264,7 +271,6 @@ export default function InvoiceDetailsReport() {
                     </div>
                 </div>
 
-                {/* Right Sidebar - Default "Settings" Panel */}
                 <aside className="w-[340px] border-l border-gray-200 bg-white p-10 flex flex-col gap-10 overflow-y-auto sticky top-0 h-screen shadow-sm z-40 print:hidden">
                     <div>
                         <h3 className="text-2xl font-black text-[#002a63] mb-6 tracking-tighter">Settings</h3>
@@ -293,7 +299,6 @@ export default function InvoiceDetailsReport() {
                     </div>
                 </aside>
 
-                {/* Sliding Detailed Filters Drawer */}
                 <aside 
                     className={`fixed top-0 right-0 h-full w-[340px] border-l border-gray-200 bg-white p-10 flex flex-col gap-10 overflow-y-auto shadow-2xl z-[100] transition-transform duration-300 ease-in-out ${isFiltersOpen ? 'translate-x-0' : 'translate-x-full'}`}
                 >
@@ -305,7 +310,6 @@ export default function InvoiceDetailsReport() {
                         <button onClick={resetFilters} className="text-xs font-black text-fb-blue hover:underline mb-10 block uppercase tracking-widest">Reset all</button>
                         
                         <div className="space-y-10">
-                            {/* Date Range Selector */}
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Date Range</label>
                                 <div className="relative group">
@@ -323,7 +327,6 @@ export default function InvoiceDetailsReport() {
                                 </div>
                             </div>
 
-                            {/* Date Type */}
                             <div className="space-y-4 pt-2">
                                 <label className="flex items-center gap-4 cursor-pointer group">
                                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${dateType === 'Issue Date' ? 'border-fb-blue bg-white' : 'border-gray-300 hover:border-gray-400'}`}>
@@ -343,7 +346,6 @@ export default function InvoiceDetailsReport() {
 
                             <hr className="border-gray-100" />
 
-                            {/* Clients */}
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Clients</label>
                                 <div className="relative group">
@@ -359,7 +361,6 @@ export default function InvoiceDetailsReport() {
                                 </div>
                             </div>
 
-                            {/* Status Selector */}
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Invoice Status</label>
                                 <div className="relative group">
@@ -386,7 +387,6 @@ export default function InvoiceDetailsReport() {
                     </div>
                 </aside>
                 
-                {/* Backdrop overlay when filters are open */}
                 {isFiltersOpen && (
                     <div 
                         className="fixed inset-0 bg-[#002a63]/20 backdrop-blur-[2px] z-[90] animate-in fade-in duration-300"
