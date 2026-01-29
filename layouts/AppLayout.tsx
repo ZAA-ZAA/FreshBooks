@@ -34,32 +34,32 @@ export default function AppLayout() {
   return (
     <div className="h-screen bg-[#f5f7f9] flex flex-col overflow-hidden font-sans select-none">
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Sidebar - EXACT FB BLUE DESIGN FROM SCREENSHOT */}
-        <aside className={`w-[220px] bg-fb-blue text-white flex flex-col fixed md:relative h-full z-[60] md:z-auto transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        {/* Sidebar - VIBRANT FB BLUE DESIGN FROM SCREENSHOT */}
+        <aside className={`w-[220px] bg-[#0075dd] text-white flex flex-col fixed md:relative h-full z-[60] md:z-auto transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
             {/* Top Identity Block */}
-            <div className="bg-[#002a63]/40 p-4 border-b border-white/5 cursor-pointer">
+            <div className="bg-[#002a63]/20 p-4 border-b border-white/5 cursor-pointer hover:bg-[#002a63]/30 transition-colors">
                 <div className="flex items-center justify-between">
                     <div>
                         <div className="text-xs font-black uppercase tracking-widest text-white/95 leading-tight">Demo</div>
-                        <div className="text-[10px] font-bold text-white/70">Owner</div>
+                        <div className="text-[10px] font-bold text-white/60 uppercase tracking-tight">Owner</div>
                     </div>
                     <ChevronDown size={14} className="text-white/40" />
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scroll py-4">
-                <nav className="space-y-0.5">
+            <div className="flex-1 overflow-y-auto custom-scroll py-2">
+                <nav className="space-y-0">
                     {SIDEBAR_ITEMS.map((item) => (
                         <div 
                             key={item.path}
                             onClick={() => { navigate(item.path); setIsMobileMenuOpen(false); }}
-                            className={`flex items-center px-4 py-2.5 cursor-pointer transition-colors relative group ${
+                            className={`flex items-center px-4 py-3 cursor-pointer transition-colors relative group ${
                                 isActiveLink(item.path)
                                 ? 'bg-[#002a63] text-white font-bold' 
-                                : 'text-white/90 hover:bg-white/10'
+                                : 'text-white/80 hover:text-white hover:bg-white/5'
                             }`}
                         >
-                            {isActiveLink(item.path) && <div className="absolute left-0 top-0 bottom-0 w-1 bg-fb-yellow"></div>}
+                            {isActiveLink(item.path) && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#f9c80e]"></div>}
                             <span className={`mr-3 ${isActiveLink(item.path) ? 'opacity-100' : 'opacity-60'}`}>{item.icon}</span>
                             <span className="text-[13px]">{item.label}</span>
                             {item.hasChevron && <ChevronDown size={12} className="ml-auto opacity-40 group-hover:opacity-60 transition-opacity" />}
@@ -67,12 +67,12 @@ export default function AppLayout() {
                     ))}
                 </nav>
 
-                <div className="mt-8 px-4 border-t border-white/10 pt-6 space-y-4">
+                <div className="mt-4 px-4 border-t border-white/10 pt-4 space-y-4 pb-8">
                     {SIDEBAR_BOTTOM_ITEMS.map((item) => (
                         <div 
                           key={item.path} 
                           onClick={() => navigate(item.path)}
-                          className="text-white/70 hover:text-white text-[12px] font-medium cursor-pointer transition-colors"
+                          className="text-white/60 hover:text-white text-[12px] font-bold cursor-pointer transition-colors"
                         >
                           {item.label}
                         </div>
@@ -80,37 +80,37 @@ export default function AppLayout() {
                 </div>
             </div>
             
-            {/* Sidebar Bottom Branding */}
-            <div className="p-6 mt-auto">
-                <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-fb-blue font-black text-2xl leading-none">f</div>
+            {/* Sidebar Bottom branding */}
+            <div className="p-6">
+                <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0075dd] font-black text-2xl leading-none shadow-sm">f</div>
             </div>
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <header className="h-16 bg-white border-b border-gray-200 flex-none flex items-center justify-end px-8 z-50">
-                <button className="md:hidden text-fb-navy p-2 mr-auto" onClick={() => setIsMobileMenuOpen(true)}>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
+            <header className="h-16 bg-white border-b border-gray-100 flex-none flex items-center justify-end px-8 z-50">
+                <button className="md:hidden text-[#002a63] p-2 mr-auto" onClick={() => setIsMobileMenuOpen(true)}>
                     <Menu size={24} />
                 </button>
                 
                 <div className="flex items-center gap-6">
-                    <Search size={18} className="text-gray-400 cursor-pointer hover:text-fb-navy" />
-                    <Bell size={18} className="text-gray-400 cursor-pointer hover:text-fb-navy" />
-                    <HelpCircle size={18} className="text-gray-400 cursor-pointer hover:text-fb-navy" />
+                    <Search size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
+                    <Bell size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
+                    <HelpCircle size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
                     <div className="flex items-center gap-2 cursor-pointer" ref={profileRef} onClick={() => setIsProfileOpen(!isProfileOpen)}>
-                        <div className="w-8 h-8 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center font-bold text-fb-blue text-[11px]">JD</div>
+                        <div className="w-8 h-8 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center font-bold text-[#0075dd] text-[11px]">JD</div>
                     </div>
 
                     {isProfileOpen && (
                         <div className="absolute right-8 top-[56px] w-56 bg-white border border-gray-200 rounded shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-1 duration-150">
                              <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                                <p className="text-xs font-bold text-fb-navy">John Doe</p>
+                                <p className="text-xs font-bold text-[#002a63]">John Doe</p>
                                 <p className="text-[10px] text-gray-400">john.doe@demo.com</p>
                              </div>
-                             <div onClick={() => {navigate('/settings'); setIsProfileOpen(false);}} className="px-4 py-2 hover:bg-fb-gray text-sm cursor-pointer flex items-center gap-2 text-fb-navy font-bold">
+                             <div onClick={() => {navigate('/settings'); setIsProfileOpen(false);}} className="px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer flex items-center gap-2 text-[#002a63] font-bold">
                                 <User size={14} className="text-gray-400" /> My Profile
                              </div>
-                             <div onClick={logout} className="px-4 py-2 hover:bg-fb-gray text-sm cursor-pointer text-red-500 font-bold flex items-center gap-2 border-t border-gray-50 mt-1">
+                             <div onClick={logout} className="px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer text-red-500 font-bold flex items-center gap-2 border-t border-gray-50 mt-1">
                                 <LogOut size={14} /> Log Out
                              </div>
                         </div>
@@ -118,8 +118,8 @@ export default function AppLayout() {
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto custom-scroll p-10 bg-[#f5f7f9]">
-                <div className="max-w-[1200px] mx-auto">
+            <main className="flex-1 overflow-y-auto custom-scroll p-10 bg-white">
+                <div className="max-w-[1100px] mx-auto">
                      <Outlet />
                 </div>
             </main>
@@ -127,7 +127,7 @@ export default function AppLayout() {
       </div>
 
       {isMobileMenuOpen && (
-          <div className="fixed inset-0 bg-fb-navy/50 z-[55] md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+          <div className="fixed inset-0 bg-[#002a63]/50 z-[55] md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
       )}
     </div>
   );

@@ -1,221 +1,180 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     Play, Calendar, Clock, Square, CheckCircle2, 
     ChevronDown, Plus, Search, Filter, MoreHorizontal, 
-    Trash2, Pencil, Timer, TimerReset, Zap
+    Trash2, Pencil, Timer, TimerReset, Zap, X, ChevronLeft, ChevronRight,
+    FileText, Calculator, Users
 } from 'lucide-react';
 
 export default function TimeTracking() {
-    const [isRunning, setIsRunning] = useState(false);
-    const [seconds, setSeconds] = useState(0);
-    const [entries, setEntries] = useState<any[]>([]);
-    const [showToast, setShowToast] = useState(false);
-    const [taskName, setTaskName] = useState('');
-
-    useEffect(() => {
-        const stored = localStorage.getItem('fb_time_entries');
-        if (stored) setEntries(JSON.parse(stored));
-    }, []);
-
-    useEffect(() => {
-        let interval: any;
-        if (isRunning) {
-            interval = setInterval(() => {
-                setSeconds(s => s + 1);
-            }, 1000);
-        }
-        return () => clearInterval(interval);
-    }, [isRunning]);
-
-    const formatTime = (totalSeconds: number) => {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-    
-    const handleToggleTimer = () => {
-        if (isRunning) {
-            const newEntry = {
-                id: Date.now(),
-                date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                task: taskName || 'Development & Consulting',
-                client: 'General Business',
-                duration: formatTime(seconds),
-                durationSec: seconds
-            };
-            const updated = [newEntry, ...entries];
-            setEntries(updated);
-            localStorage.setItem('fb_time_entries', JSON.stringify(updated));
-            setSeconds(0);
-            setTaskName('');
-            setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
-        }
-        setIsRunning(!isRunning);
-    };
-
-    const totalSecondsLogged = entries.reduce((acc, curr) => acc + (curr.durationSec || 0), 0);
+    const navigate = useNavigate();
+    const [showOnboarding, setShowOnboarding] = useState(true);
+    const [activeTab, setActiveTab] = useState('Day');
 
     return (
-        <div className="space-y-10 animate-in fade-in duration-300 pb-20 relative">
-            {showToast && (
-                <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-[#28303f] text-white px-8 py-3 rounded-xl shadow-2xl flex items-center animate-in fade-in slide-in-from-top-4 duration-300">
-                    <CheckCircle2 className="text-fb-green mr-3" size={24} />
-                    <span className="font-bold">Entry Logged</span>
+        <div className="space-y-10 animate-in fade-in duration-300 pb-20 font-sans">
+            {/* Header Area */}
+            <div className="flex justify-between items-end mb-6">
+                <h1 className="text-4xl font-bold text-[#2d3a4b]">Time Tracking</h1>
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2 text-[15px] font-bold text-[#556d82] hover:text-[#0075dd] cursor-pointer">
+                        More Actions <ChevronDown size={20} className="text-gray-300" />
+                    </div>
+                    <button 
+                        className="bg-[#00a651] hover:bg-[#008541] text-white px-8 py-2.5 rounded font-black text-lg shadow-md transition-all active:scale-95"
+                    >
+                        Generate Invoice
+                    </button>
+                </div>
+            </div>
+
+            {/* Nav Tabs */}
+            <div className="flex justify-center">
+                <div className="flex bg-white border border-gray-200 rounded-full p-1 shadow-sm">
+                    {['Day', 'Week', 'Month', 'All'].map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`px-10 py-1.5 rounded-full text-sm font-bold transition-all ${activeTab === tab ? 'bg-[#0075dd] text-white shadow-md' : 'text-gray-500 hover:text-[#0075dd]'}`}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Onboarding Banner */}
+            {showOnboarding && (
+                <div className="bg-white border border-gray-200 rounded-lg p-10 relative shadow-sm animate-in zoom-in-95 duration-500 overflow-hidden">
+                    <button onClick={() => setShowOnboarding(false)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-500 transition-colors">
+                        <X size={20} />
+                    </button>
+                    <h2 className="text-2xl font-black text-[#0075dd] text-center mb-12 tracking-tight">Track Time and Never Lose Another Billable Minute</h2>
+                    <div className="grid grid-cols-3 gap-10">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-20 h-20 bg-[#f0f9ff] rounded-full flex items-center justify-center mb-6 border border-[#e0f2fe] relative">
+                                <div className="w-12 h-12 bg-[#0075dd] rounded-lg flex items-center justify-center text-white shadow-sm">
+                                    <Clock size={24} />
+                                </div>
+                                <div className="absolute top-1 right-1 w-6 h-6 bg-white rounded-full border border-gray-100 flex items-center justify-center text-[#0075dd] shadow-sm">
+                                    <span className="text-[10px] font-black">$</span>
+                                </div>
+                            </div>
+                            <h3 className="font-bold text-[#2d3a4b] text-sm mb-1 uppercase tracking-tight">Get Paid for All Your Time</h3>
+                            <p className="text-xs text-gray-500 px-4 leading-relaxed">You can track time with the timer, or by logging time manually. <span className="text-[#0075dd] cursor-pointer hover:underline font-bold">Learn More</span></p>
+                        </div>
+                        <div className="flex flex-col items-center text-center border-x border-gray-100 px-10">
+                            <div className="w-20 h-20 bg-[#fff9f1] rounded-full flex items-center justify-center mb-6 border border-[#fff2e0]">
+                                <div className="w-12 h-12 bg-[#f9c80e] rounded-lg flex items-center justify-center text-white shadow-sm relative">
+                                    <FileText size={24} />
+                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-pink-400 rounded-full border border-white flex items-center justify-center text-white shadow-sm">
+                                         <Clock size={10} />
+                                    </div>
+                                </div>
+                            </div>
+                            <h3 className="font-bold text-[#2d3a4b] text-sm mb-1 uppercase tracking-tight">Convert Time into Invoices</h3>
+                            <p className="text-xs text-gray-500 px-4 leading-relaxed">Accurately bill your clients for the time you've worked. <span className="text-[#0075dd] cursor-pointer hover:underline font-bold">Learn More</span></p>
+                        </div>
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-20 h-20 bg-[#fdf2f2] rounded-full flex items-center justify-center mb-6 border border-[#fee2e2] relative">
+                                <div className="w-12 h-12 bg-pink-400 rounded-full flex items-center justify-center text-white shadow-sm gap-0.5">
+                                    <div className="flex flex-col gap-0.5">
+                                        <Clock size={8} />
+                                        <Clock size={8} />
+                                    </div>
+                                    <Clock size={12} />
+                                </div>
+                            </div>
+                            <h3 className="font-bold text-[#2d3a4b] text-sm mb-1 uppercase tracking-tight">Track Everything for Everyone</h3>
+                            <p className="text-xs text-gray-500 px-4 leading-relaxed">Don't miss a billable moment by staying on top of billable hours. <span className="text-[#0075dd] cursor-pointer hover:underline font-bold">Learn More</span></p>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {/* Header Area */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                    <h1 className="text-5xl font-black text-fb-navy tracking-tighter">Time Tracking</h1>
-                    <p className="text-gray-400 font-bold mt-2">Log every billable minute with precision</p>
+            {/* Calendar Strip Section */}
+            <div className="space-y-6">
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-6">
+                        <div className="flex gap-4">
+                            <ChevronLeft className="text-gray-400 cursor-pointer hover:text-[#002a63]" size={20} />
+                            <ChevronRight className="text-gray-400 cursor-pointer hover:text-[#002a63]" size={20} />
+                        </div>
+                        <div className="flex items-center gap-2 font-bold text-gray-500">
+                             Thu, Jan 29th <Calendar size={18} className="text-gray-300" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <span className="text-xs font-bold text-gray-400">Hours Logged By</span>
+                        <div className="flex items-center gap-1 border border-gray-300 rounded px-4 py-1.5 bg-white cursor-pointer min-w-[200px] justify-between">
+                            <span className="text-sm font-bold text-[#2d3a4b]">John Doe</span>
+                            <ChevronDown size={18} className="text-gray-400" />
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-6">
-                    <button className="text-fb-navy font-black text-lg hover:underline transition-all">Download Extension</button>
-                    <button className="bg-fb-navy hover:bg-fb-slate text-white px-8 py-4 rounded-2xl font-black text-xl shadow-xl transition-all active:scale-95 flex items-center gap-3">
-                         Review History <ChevronDown size={20} />
-                    </button>
-                </div>
-            </div>
 
-            {/* Floating Timer Console */}
-            <div className="bg-white border-4 border-fb-blue rounded-[32px] p-8 shadow-2xl relative overflow-hidden group">
-                <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-                    <div className="flex-1 w-full">
-                        <label className="text-[10px] font-black text-fb-blue uppercase tracking-[0.2em] mb-3 block">What are you working on?</label>
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-fb-blue transition-transform group-hover:scale-110">
-                                <Zap size={24} />
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                    <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/20">
+                         {[
+                             { day: 'Mon', num: '26', hours: '-' },
+                             { day: 'Tue', num: '27', hours: '-' },
+                             { day: 'Wed', num: '28', hours: '10:00' },
+                             { day: 'Thu', num: '29', hours: '-', active: true },
+                             { day: 'Fri', num: '30', hours: '-' },
+                             { day: 'Sat', num: '31', hours: '-' },
+                             { day: 'Sun', num: '1', hours: '-' },
+                         ].map(d => (
+                            <div key={d.day} className={`p-4 border-r border-gray-100 last:border-0 flex flex-col items-center ${d.active ? 'bg-blue-50/50 relative' : ''}`}>
+                                {d.active && <div className="absolute top-0 left-0 right-0 h-1 bg-[#0075dd]"></div>}
+                                <div className="flex items-center gap-1 mb-2">
+                                    <span className="text-xs font-black text-[#556d82] uppercase">{d.day}</span>
+                                    <span className={`text-xs font-black px-1.5 py-0.5 rounded ${d.active ? 'bg-[#0075dd] text-white' : 'text-gray-400'}`}>{d.num}</span>
+                                </div>
+                                <div className="text-xs text-gray-400 font-bold">{d.hours}</div>
                             </div>
-                            <input 
-                                value={taskName}
-                                onChange={e => setTaskName(e.target.value)}
-                                placeholder="Enter project or task name..." 
-                                className="text-2xl font-black text-fb-navy border-none p-0 outline-none w-full placeholder:text-gray-200"
-                            />
-                        </div>
+                         ))}
                     </div>
-                    <div className="h-20 w-[2px] bg-gray-100 hidden md:block"></div>
-                    <div className="text-center px-8">
-                        <div className={`text-5xl font-mono font-black tracking-tighter ${isRunning ? 'text-fb-blue' : 'text-gray-300'}`}>
-                            {formatTime(isRunning ? seconds : 0)}
-                        </div>
-                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-2">Duration</div>
+                    <div className="p-4 flex justify-end bg-gray-50/50">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-4">Total: 10:00</span>
                     </div>
-                    <button 
-                        onClick={handleToggleTimer}
-                        className={`${isRunning ? 'bg-red-500 shadow-red-200' : 'bg-fb-green shadow-fb-green/20'} text-white w-20 h-20 rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-105 active:scale-90`}
-                    >
-                        {isRunning ? <Square className="fill-current" size={32} /> : <Play className="fill-current ml-1" size={40} />}
-                    </button>
-                </div>
-                <div className="absolute top-1/2 right-40 -translate-y-1/2 pointer-events-none opacity-[0.03] group-hover:opacity-10 transition-opacity">
-                    <TimerReset size={180} />
-                </div>
-            </div>
 
-            {/* Quick Stats Shelf */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="bg-fb-gray border border-gray-100 rounded-3xl p-8 hover:shadow-lg transition-all border-b-8 border-b-fb-blue">
-                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Daily Velocity</h4>
-                    <div className="text-3xl font-black text-fb-navy">0h 00m</div>
-                    <div className="mt-2 text-xs font-bold text-fb-blue bg-blue-50 w-fit px-3 py-1 rounded-full">Today's Total</div>
-                </div>
-                <div className="bg-fb-gray border border-gray-100 rounded-3xl p-8 hover:shadow-lg transition-all border-b-8 border-b-fb-green">
-                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Aggregate Logged</h4>
-                    <div className="text-3xl font-black text-fb-navy">{formatTime(totalSecondsLogged)}</div>
-                    <div className="mt-2 text-xs font-bold text-fb-green bg-fb-green/10 w-fit px-3 py-1 rounded-full">Historical All-time</div>
-                </div>
-                <div className="bg-fb-gray border border-gray-100 rounded-3xl p-8 hover:shadow-lg transition-all border-b-8 border-b-fb-yellow">
-                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Pending Accruals</h4>
-                    <div className="text-3xl font-black text-fb-navy">₱0.00</div>
-                    <div className="mt-2 text-xs font-bold text-fb-yellow bg-amber-50 w-fit px-3 py-1 rounded-full">Unbilled Value</div>
-                </div>
-            </div>
-
-            {/* Entries List */}
-            <div className="pt-10">
-                <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-3xl font-black text-fb-navy tracking-tight">Recent Ledger</h2>
-                    <div className="flex gap-4">
-                        <div className="relative group">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-fb-blue" size={18} />
-                            <input className="pl-10 pr-4 py-2.5 border border-gray-200 rounded-2xl text-sm font-bold w-64 focus:ring-4 focus:ring-fb-blue/5 outline-none" placeholder="Search tasks..." />
-                        </div>
-                        <button className="p-2.5 bg-white border border-gray-200 rounded-2xl hover:bg-fb-gray transition-colors">
-                            <Filter size={18} className="text-fb-navy" />
-                        </button>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden border-t-8 border-t-fb-blue">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50/50 border-b border-gray-100 text-[11px] font-black uppercase tracking-[0.25em] text-gray-400">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-white border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                             <tr>
-                                <th className="p-8">Work Description / Details</th>
-                                <th className="p-8">Timeline</th>
-                                <th className="p-8 text-right">Elapsed</th>
-                                <th className="p-8 w-32"></th>
+                                <th className="p-4">Team Member / Date <ChevronDown size={10} className="inline ml-1" /></th>
+                                <th className="p-4">Client / Project / Service / Note</th>
+                                <th className="p-4 text-right">Time / Status</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {isRunning && (
-                                <tr className="bg-green-50/50 animate-pulse">
-                                    <td className="p-8">
-                                        <div className="font-black text-fb-navy text-lg">{taskName || 'Timer Running...'}</div>
-                                        <div className="text-[10px] font-black text-fb-green uppercase tracking-widest mt-1">Active Now</div>
-                                    </td>
-                                    <td className="p-8">
-                                        <div className="font-bold text-fb-navy text-sm uppercase">Current Session</div>
-                                    </td>
-                                    <td className="p-8 text-right font-mono font-black text-fb-navy text-xl">
-                                        {formatTime(seconds)}
-                                    </td>
-                                    <td className="p-8"></td>
-                                </tr>
-                            )}
-                            {entries.map(entry => (
-                                <tr key={entry.id} className="hover:bg-fb-gray transition-all group cursor-default">
-                                    <td className="p-8">
-                                        <div className="font-black text-fb-navy group-hover:text-fb-blue text-lg leading-tight mb-1">{entry.task}</div>
-                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{entry.client}</div>
-                                    </td>
-                                    <td className="p-8">
-                                        <div className="font-black text-fb-navy text-xs uppercase mb-1">{entry.date}</div>
-                                        <div className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Entry Verified</div>
-                                    </td>
-                                    <td className="p-8 text-right">
-                                        <div className="font-mono font-black text-fb-navy text-xl">{entry.duration}</div>
-                                        <div className="text-[9px] font-black text-fb-green uppercase tracking-widest mt-1">Logged</div>
-                                    </td>
-                                    <td className="p-8 text-right">
-                                        <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-x-2">
-                                            <button className="w-10 h-10 bg-fb-blue/5 text-fb-blue rounded-xl flex items-center justify-center hover:bg-fb-blue hover:text-white transition-all shadow-sm"><Pencil size={18} /></button>
-                                            <button onClick={() => {
-                                                if(window.confirm('Delete entry?')) {
-                                                    const updated = entries.filter(e => e.id !== entry.id);
-                                                    setEntries(updated);
-                                                    localStorage.setItem('fb_time_entries', JSON.stringify(updated));
-                                                }
-                                            }} className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={18} /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                        <tbody className="divide-y divide-gray-100">
+                             <tr>
+                                <td colSpan={3} className="p-4">
+                                     <div className="flex items-center gap-4">
+                                         <div className="flex-1 border-2 border-dashed border-gray-200 rounded-lg p-2 text-center text-gray-400 font-bold flex items-center justify-center gap-2 hover:bg-gray-50 cursor-pointer">
+                                             <Plus size={16} className="text-[#00a651]" /> New Entry
+                                         </div>
+                                         <button className="flex items-center gap-2 px-8 py-2 border-2 border-[#17a2b8] text-[#17a2b8] rounded font-black text-sm hover:bg-[#17a2b8]/5">
+                                             <Play size={14} className="fill-current" /> Start Timer
+                                         </button>
+                                     </div>
+                                </td>
+                             </tr>
                         </tbody>
+                        <tfoot className="bg-gray-50/30">
+                             <tr>
+                                <td colSpan={3} className="p-6">
+                                     <div className="flex justify-end">
+                                         <div className="text-right">
+                                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">Daily Total:</span>
+                                             <span className="text-xs font-black text-[#2d3a4b]">0:00</span>
+                                         </div>
+                                     </div>
+                                </td>
+                             </tr>
+                        </tfoot>
                     </table>
-                    {entries.length === 0 && !isRunning && (
-                        <div className="p-32 text-center bg-gray-50/30">
-                            <div className="flex flex-col items-center">
-                                <Timer size={64} className="text-gray-100 mb-6" />
-                                <p className="text-gray-400 font-black text-2xl italic tracking-tight">No billable hours logged yet</p>
-                                <button onClick={() => setIsRunning(true)} className="bg-fb-blue text-white px-8 py-3 rounded-xl font-black mt-6 shadow-xl active:scale-95 transition-all">Start Your First Timer</button>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
