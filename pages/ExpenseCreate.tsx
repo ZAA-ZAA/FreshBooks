@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
-    X, CheckCircle2, ChevronDown, ChevronRight, ImageIcon, 
+    X, CheckCircle2, ChevronDown, ChevronRight, Image as ImageIcon, 
     Calendar, Receipt, Tag, Briefcase, Smile, Home, Pizza,
     Clock, Globe, RotateCcw, UserPlus, Info, Users
 } from 'lucide-react';

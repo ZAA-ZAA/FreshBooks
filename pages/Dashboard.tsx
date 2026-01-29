@@ -34,11 +34,11 @@ export default function Dashboard() {
 
   const revenueData = [
     { name: '0', val: 0, type: 'outstanding' },
-    { name: '2k', val: 1500, type: 'outstanding' },
-    { name: '4k', val: 3200, type: 'overdue' },
-    { name: '6k', val: 4500, type: 'outstanding' },
-    { name: '8k', val: 6200, type: 'outstanding' },
-    { name: '10k', val: 8100, type: 'outstanding' },
+    { name: '2k', val: Math.min(stats.outstanding, 2000), type: 'outstanding' },
+    { name: '4k', val: Math.min(stats.overdue, 4000), type: 'overdue' },
+    { name: '6k', val: stats.outstanding > 4000 ? 4500 : 0, type: 'outstanding' },
+    { name: '8k', val: stats.outstanding > 6000 ? 6200 : 0, type: 'outstanding' },
+    { name: '10k', val: stats.outstanding > 8000 ? 8100 : 0, type: 'outstanding' },
   ];
 
   const createMenuItems = [
@@ -50,7 +50,6 @@ export default function Dashboard() {
 
   return (
     <div className="animate-in fade-in duration-500 pb-10 font-sans">
-      {/* 50% Off Ribbon from screenshot */}
       <div className="bg-white border border-blue-100 rounded-lg p-3 flex items-center justify-center gap-4 mb-10 shadow-sm relative overflow-hidden group">
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0075dd]"></div>
           <div className="text-gray-400 text-xs italic flex items-center gap-2">
@@ -69,7 +68,7 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center gap-8">
-              <button className="text-[15px] font-bold text-[#556d82] hover:text-[#0075dd]">Add Team Member</button>
+              <button onClick={() => navigate('/team')} className="text-[15px] font-bold text-[#556d82] hover:text-[#0075dd]">Add Team Member</button>
               <div className="relative" ref={createNewRef}>
                   <button 
                     onClick={() => setCreateNewOpen(!createNewOpen)}
@@ -99,7 +98,6 @@ export default function Dashboard() {
           <h2 className="text-xl font-bold text-[#2d3a4b] mb-8">Welcome, John! Here's how to get the most out of FreshBooks.</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-              {/* Promo Card 1 - A Faster Way... */}
               <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden flex flex-col relative group">
                   <div className="h-44 bg-[#fff9f1] flex items-center justify-center relative">
                       <button className="absolute top-3 right-3 text-gray-300 hover:text-gray-500"><X size={16} /></button>
@@ -113,11 +111,10 @@ export default function Dashboard() {
                   <div className="p-8 flex-1 flex flex-col items-center text-center">
                       <h3 className="font-bold text-[#2d3a4b] text-lg mb-3 leading-tight">A Faster Way to Pull in Your Expense Data</h3>
                       <p className="text-[#556d82] text-sm leading-relaxed mb-10 max-w-xs">See all your business expenses at a glance by connecting FreshBooks with your bank to automatically track your transactions.</p>
-                      <button className="w-full max-w-[280px] py-2.5 border-2 border-[#002a63] text-[#002a63] rounded font-black text-sm hover:bg-[#002a63] hover:text-white transition-all">Connect Your Bank</button>
+                      <button onClick={() => navigate('/apps')} className="w-full max-w-[280px] py-2.5 border-2 border-[#002a63] text-[#002a63] rounded font-black text-sm hover:bg-[#002a63] hover:text-white transition-all">Connect Your Bank</button>
                   </div>
               </div>
 
-              {/* Promo Card 2 - Spread the word... */}
               <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden flex flex-col relative group">
                   <div className="h-44 bg-[#e6f4ff] flex items-center justify-center relative">
                       <button className="absolute top-3 right-3 text-gray-300 hover:text-gray-500"><X size={16} /></button>
@@ -136,7 +133,6 @@ export default function Dashboard() {
               </div>
           </div>
 
-          {/* Outstanding Invoices Section */}
           <div className="bg-white border border-gray-200 rounded p-8 shadow-sm">
               <div className="flex justify-between items-center mb-10">
                   <div className="flex items-center gap-4">

@@ -1,157 +1,158 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     BarChart3, PieChart, FileText, CreditCard, X, Star, 
     ChevronRight, ChevronLeft, ChevronDown, Printer, Download,
     Clock, Users, Calculator, Briefcase, FileSearch, ScrollText, 
     BookOpen, RotateCcw, Landmark, TrendingUp, Handshake, DollarSign,
-    Scale, Receipt, History
+    Scale, Receipt, History, ShoppingBag
 } from 'lucide-react';
 
+const REPORT_DEFINITIONS = [
+    { title: "Invoice Details", desc: "A detailed summary of all invoices you've sent over a period of time", icon: FileText, category: "Invoice and Expense", path: "/reports/invoice-details" },
+    { title: "Expense Report", desc: "See how much money you're spending, and where you're spending it", icon: PieChart, category: "Invoice and Expense", path: "/reports/expense-report" },
+    { title: "Item Sales", desc: "A breakdown of sales and revenue for each item or service you sell", icon: ShoppingBag, category: "Invoice and Expense", path: "/reports/item-sales" },
+    { title: "Profit and Loss", desc: "A summary of your total income, expenses, and net profit.", icon: BarChart3, category: "Accounting", updated: true },
+    { title: "Accounts Aging", desc: "Find out which clients are taking a long time to pay", icon: Clock, category: "Payments" },
+    { title: "General Ledger", desc: "A complete record of transactions and balances for all your accounts.", icon: ScrollText, category: "Accounting", updated: true },
+    { title: "Revenue by Client", desc: "A breakdown of how much revenue each of your clients is bringing in.", icon: TrendingUp, category: "Accounting", updated: true },
+];
+
 export default function Reports() {
-    const [favorites, setFavorites] = useState(['Profit and Loss']);
+    const navigate = useNavigate();
+    const [favorites, setFavorites] = useState(['Invoice Details', 'Expense Report', 'Item Sales']);
+    const [stats, setStats] = useState({ revenue: 0, expense: 0, net: 0 });
+    const [activeCategory, setActiveCategory] = useState('All');
+
+    useEffect(() => {
+        const invoices = JSON.parse(localStorage.getItem('fb_invoices') || '[]');
+        const expenses = JSON.parse(localStorage.getItem('fb_expenses') || '[]');
+        const storedFavs = JSON.parse(localStorage.getItem('fb_report_favorites'));
+        if (storedFavs) setFavorites(storedFavs);
+        
+        const rev = invoices.filter(i => i.status === 'Paid').reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
+        const exp = expenses.reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
+        
+        setStats({ revenue: rev, expense: exp, net: rev - exp });
+    }, []);
 
     const toggleFavorite = (title: string) => {
-        setFavorites(prev => prev.includes(title) ? prev.filter(f => f !== title) : [...prev, title]);
+        setFavorites(prev => {
+            const next = prev.includes(title) ? prev.filter(f => f !== title) : [...prev, title];
+            localStorage.setItem('fb_report_favorites', JSON.stringify(next));
+            return next;
+        });
     };
 
-    const ReportCard = ({ title, desc, icon: Icon, updated = false }) => (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col min-h-[140px] relative group hover:border-[#0075dd] transition-all cursor-pointer shadow-sm">
-             <div className="flex justify-between items-start mb-4">
-                 <div className="text-[#0075dd]">
-                     <Icon size={24} />
-                 </div>
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); toggleFavorite(title); }}
-                    className={`transition-all ${favorites.includes(title) ? 'text-[#f9c80e]' : 'text-gray-300 hover:text-gray-400'}`}
-                >
-                    <Star size={18} className={favorites.includes(title) ? 'fill-current' : ''} />
-                </button>
-             </div>
-             <div className="flex-1">
-                 <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bold text-[#2d3a4b] text-[14px]">{title}</h3>
-                    {updated && (
-                        <span className="bg-gray-100 text-gray-500 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-gray-200 tracking-tighter">
-                            UPDATED
-                        </span>
-                    )}
-                 </div>
-                 <p className="text-[11px] text-[#556d82] leading-relaxed line-clamp-2">{desc}</p>
-             </div>
-        </div>
-    );
+    const ReportCard = ({ report }) => {
+        const { title, desc, icon: Icon, updated = false, path } = report;
+        let liveValue = null;
+        if (title === "Expense Report") liveValue = `Total Spent: ₱${stats.expense.toLocaleString()}`;
+        if (title === "Invoice Details") liveValue = `Total Invoiced: ₱${stats.revenue.toLocaleString()}`;
+        if (title === "Profit and Loss") liveValue = `Net Profit: ₱${stats.net.toLocaleString()}`;
 
-    const SectionHeader = ({ title }: { title: string }) => (
-        <h2 className="text-[12px] font-bold text-[#2d3a4b] uppercase tracking-widest mb-6 border-b border-gray-100 pb-2">{title}</h2>
-    );
+        return (
+            <div 
+                onClick={() => path && navigate(path)}
+                className="bg-white border border-gray-200 rounded-xl p-8 flex flex-col min-h-[180px] relative group hover:border-[#0075dd] hover:shadow-xl transition-all cursor-pointer shadow-sm"
+            >
+                 <div className="flex justify-between items-start mb-6">
+                     <div className="text-[#0075dd] bg-blue-50 p-3 rounded-xl group-hover:bg-[#0075dd] group-hover:text-white transition-all">
+                         <Icon size={28} />
+                     </div>
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); toggleFavorite(title); }}
+                        className={`transition-all p-1 hover:scale-110 ${favorites.includes(title) ? 'text-[#f9c80e]' : 'text-gray-300 hover:text-gray-400'}`}
+                    >
+                        <Star size={20} className={favorites.includes(title) ? 'fill-current' : ''} />
+                    </button>
+                 </div>
+                 <div className="flex-1">
+                     <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-black text-[#002a63] text-lg group-hover:text-fb-blue transition-colors">{title}</h3>
+                        {updated && (
+                            <span className="bg-fb-green/10 text-fb-green text-[8px] font-black uppercase px-2 py-1 rounded-full border border-fb-green/20 tracking-widest">
+                                UPDATED
+                            </span>
+                        )}
+                     </div>
+                     <p className="text-xs text-[#556d82] font-medium leading-relaxed line-clamp-2 mb-4">{desc}</p>
+                     {liveValue && (
+                         <div className="mt-auto pt-4 border-t border-gray-50 text-[10px] font-black text-[#0075dd] uppercase tracking-[0.2em]">
+                             {liveValue}
+                         </div>
+                     )}
+                 </div>
+            </div>
+        );
+    };
+
+    const favoriteReports = REPORT_DEFINITIONS.filter(r => favorites.includes(r.title));
 
     return (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-20 font-sans">
-            {/* Header */}
-            <div className="flex justify-between items-end mb-4">
-                <h1 className="text-4xl font-bold text-[#2d3a4b]">Reports</h1>
+        <div className="space-y-16 animate-in fade-in duration-500 pb-24 font-sans">
+            <div className="flex justify-between items-end">
+                <div>
+                    <h1 className="text-5xl font-black text-[#002a63] tracking-tighter">Reports</h1>
+                    <p className="text-gray-400 font-bold mt-2">Insights and analytics to power your business growth</p>
+                </div>
             </div>
 
-            {/* Favorite Reports Shelf */}
             <div className="relative">
-                <SectionHeader title="Favorite Reports" />
+                <div className="flex items-center gap-4 mb-8">
+                    <h2 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em] whitespace-nowrap">Pinned Reports</h2>
+                    <div className="h-[1px] bg-gray-100 w-full"></div>
+                </div>
                 
-                {/* Handwriting Annotation */}
-                <div className="absolute left-[30%] top-16 pointer-events-none z-10 hidden lg:block">
-                    <div className="relative">
-                        <div className="text-[#0075dd] font-handwriting text-2xl leading-none transform -rotate-2">Easy access to your favorite reports</div>
-                        <svg width="100" height="40" viewBox="0 0 100 40" fill="none" className="text-[#0075dd] absolute -left-12 -bottom-2 transform -scale-x-100 rotate-12">
-                             <path d="M5 5C5 5 25 35 95 35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                             <path d="M15 30L5 35L15 40" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                {favoriteReports.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {favoriteReports.map(report => (
+                            <ReportCard key={report.title} report={report} />
+                        ))}
                     </div>
+                ) : (
+                    <div className="bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-[32px] p-16 text-center">
+                        <Star className="mx-auto text-gray-200 mb-4 animate-pulse" size={48} />
+                        <p className="text-lg font-black text-gray-300 italic">Favorite your most-used reports for quick access</p>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-10">
+                <div className="flex gap-10 border-b border-gray-100 overflow-x-auto scrollbar-hide">
+                    {['All', 'Invoice and Expense', 'Payments', 'Accounting'].map(cat => (
+                        <button 
+                            key={cat}
+                            onClick={() => setActiveCategory(cat)}
+                            className={`pb-5 text-sm font-black transition-all border-b-4 uppercase tracking-[0.2em] whitespace-nowrap ${activeCategory === cat ? 'border-[#0075dd] text-[#0075dd]' : 'border-transparent text-gray-400 hover:text-fb-navy'}`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {[1, 2, 3, 4, 5].map(i => (
-                        <div key={i} className="border border-gray-200 bg-white rounded-lg h-56 flex flex-col items-center justify-center p-6 shadow-sm relative group">
-                             <div className="w-20 h-20 rounded-full border border-gray-100 bg-gray-50/50 mb-6"></div>
-                             <div className="w-full space-y-2">
-                                <div className="h-2.5 bg-gray-100 rounded-full w-3/4 mx-auto"></div>
-                                <div className="h-2 bg-gray-50 rounded-full w-1/2 mx-auto"></div>
-                             </div>
-                             <div className="absolute top-2 right-2 p-1 text-gray-100">
-                                <Star size={16} />
-                             </div>
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {REPORT_DEFINITIONS
+                        .filter(r => activeCategory === 'All' || r.category === activeCategory)
+                        .map(report => (
+                            <ReportCard key={report.title} report={report} />
                     ))}
                 </div>
             </div>
 
-            {/* Invoice and Expense Reports */}
-            <div className="relative">
-                <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-2">
-                    <h2 className="text-[12px] font-bold text-[#2d3a4b] uppercase tracking-widest">Invoice and Expense Reports</h2>
-                    <div className="relative group">
-                         <p className="text-[11px] text-[#0075dd] italic font-bold cursor-pointer">Star your favorite reports →</p>
-                         {/* Handwriting Annotation for starring */}
-                         <div className="absolute -top-14 -right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            <div className="text-[#0075dd] font-handwriting text-xl">Star your favorite reports</div>
-                            <svg width="40" height="30" viewBox="0 0 40 30" fill="none" className="text-[#0075dd] transform translate-x-32 -translate-y-4">
-                                <path d="M35 5C35 5 30 25 5 25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M10 20L5 25L10 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                         </div>
+            <div className="bg-fb-navy rounded-[40px] p-16 text-white relative overflow-hidden shadow-2xl">
+                 <div className="relative z-10 max-w-xl">
+                    <h2 className="text-4xl font-black mb-6 leading-tight tracking-tighter">Need custom analytics?</h2>
+                    <p className="text-lg text-blue-100 mb-10 leading-relaxed font-medium">Export your raw data and create custom visualizations or share directly with your accountant.</p>
+                    <div className="flex gap-6">
+                        <button className="bg-[#0075dd] hover:bg-fb-blue text-white px-10 py-4 rounded-2xl font-black text-lg transition-all active:scale-95 shadow-xl shadow-fb-blue/20">Explore Export Options</button>
+                        <button className="border-2 border-white/20 hover:bg-white/5 text-white px-10 py-4 rounded-2xl font-black text-lg transition-all">Report Guide</button>
                     </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ReportCard title="Invoice Details" desc="A detailed summary of all invoices you've sent over a period of time" icon={FileText} />
-                    <ReportCard title="Expense Report" desc="See how much money you're spending, and where you're spending it" icon={PieChart} />
-                    <ReportCard title="Item Sales" desc="See how much money you're making from each item you sell" icon={CreditCard} />
-                    <ReportCard title="Revenue by Client" desc="A breakdown of how much revenue each of your clients is bringing in. Updated with new style and functionality." icon={TrendingUp} updated={true} />
-                </div>
-            </div>
-
-            {/* Payments Reports */}
-            <div>
-                <SectionHeader title="Payments Reports" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ReportCard title="Accounts Aging" desc="Find out which clients are taking a long time to pay" icon={Clock} />
-                    <ReportCard title="Payments Collected" desc="A summary of all the payments you have collected over a period of time" icon={Handshake} />
-                    <ReportCard title="Accounts Payable Aging" desc="Find out how much each vendor needs to be paid" icon={Landmark} />
-                    <ReportCard title="Credit Balance" desc="Summary of all your credit balance for your clients over a period of time" icon={DollarSign} />
-                </div>
-            </div>
-
-            {/* Accounting Reports */}
-            <div>
-                <SectionHeader title="Accounting Reports" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ReportCard title="Balance Sheet" desc="A snapshot of your assets, liabilities, and equity at any given point in time. Updated with new style and functionality." icon={BookOpen} updated={true} />
-                    <ReportCard title="Profit and Loss" desc="A summary of your total income, expenses, and net profit. Updated with new style and functionality." icon={BarChart3} updated={true} />
-                    <ReportCard title="General Ledger" desc="A complete record of transactions and balances for all your accounts. Updated with new style and functionality." icon={ScrollText} updated={true} />
-                    <ReportCard title="Trial Balance" desc="A quick gut check to make sure your books are balanced" icon={Scale} />
-                    <ReportCard title="Bank Reconciliation Summary" desc="Shows unreconciled bank transactions and FreshBooks entries" icon={Landmark} />
-                    <ReportCard title="Sales Tax Summary" desc="Helps determine how much you owe the government in Sales Taxes" icon={Calculator} />
-                    <ReportCard title="Cash Flow" desc="Overview of Cash coming in and going out of your business" icon={RotateCcw} />
-                    <ReportCard title="Journal Entry" desc="Helps you see all the Manual Journal Entries and Adjustments made to your books" icon={ScrollText} />
-                </div>
-            </div>
-
-            {/* Time Tracking and Project Reports */}
-            <div>
-                <SectionHeader title="Time Tracking and Project Reports" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ReportCard title="Time Entry Details" desc="A detailed summary of how much time you and / or your team tracked over a period of time" icon={Clock} />
-                    <ReportCard title="Retainer Summary" desc="A detailed work summary for your retainer clients" icon={RotateCcw} />
-                    <ReportCard title="Profitability Summary" desc="View a summary of a client's profitability across all their projects" icon={BarChart3} />
-                    <ReportCard title="Profitability Details" desc="Get a detailed breakdown of project profitability by service and expense categories" icon={DollarSign} />
-                    <ReportCard title="Team Utilization" desc="Overview of billable hours from team members against their expected capacity" icon={Users} />
-                </div>
-            </div>
-
-            {/* Logs */}
-            <div>
-                <SectionHeader title="Logs" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ReportCard title="Audit Log" desc="View changes made to your books" icon={History} />
-                </div>
+                 </div>
+                 <div className="absolute top-1/2 right-0 -translate-y-1/2 opacity-10 pointer-events-none transform translate-x-20 rotate-12">
+                     <TrendingUp size={400} />
+                 </div>
             </div>
         </div>
     );
