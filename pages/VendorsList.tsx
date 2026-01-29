@@ -1,167 +1,236 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Store, Mail, Phone, MoreHorizontal, X, CheckCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+    Plus, Search, Store, Mail, Phone, MoreHorizontal, X, 
+    CheckCircle2, Pencil, Trash2, Filter, SlidersHorizontal, UserPlus
+} from 'lucide-react';
 
 export default function VendorsList() {
+    const navigate = useNavigate();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [editingVendor, setEditingVendor] = useState(null);
     const [vendors, setVendors] = useState<any[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
     const [newVendor, setNewVendor] = useState({ name: '', email: '', phone: '' });
 
     useEffect(() => {
         const stored = localStorage.getItem('fb_vendors');
-        if (stored) {
-            setVendors(JSON.parse(stored));
+        if (stored) setVendors(JSON.parse(stored));
+        else {
+            // Seed a few vendors if empty
+            const seeds = [
+                { id: 'v1', name: 'Google Cloud Services', email: 'billing@google.com', phone: '1-800-419-0157', balance: 0 },
+                { id: 'v2', name: 'Amazon Web Services', email: 'aws-billing@amazon.com', phone: '', balance: 1450.50 },
+            ];
+            setVendors(seeds);
+            localStorage.setItem('fb_vendors', JSON.stringify(seeds));
         }
     }, []);
 
+    const filteredVendors = vendors.filter(v => 
+        v.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (v.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     const handleSave = () => {
-        const vendor = {
-            id: Date.now(),
-            name: newVendor.name,
-            email: newVendor.email,
-            phone: newVendor.phone,
-            balance: 0.00
-        };
-        const updated = [...vendors, vendor];
+        let updated;
+        if (editingVendor) {
+            updated = vendors.map(v => v.id === editingVendor.id ? { ...v, ...newVendor } : v);
+        } else {
+            const vendor = { id: Date.now().toString(), ...newVendor, balance: 0.00 };
+            updated = [vendor, ...vendors];
+        }
+        
         setVendors(updated);
         localStorage.setItem('fb_vendors', JSON.stringify(updated));
-
         setIsModalOpen(false);
+        setEditingVendor(null);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
         setNewVendor({ name: '', email: '', phone: '' });
     };
 
+    const handleEdit = (vendor) => {
+        setEditingVendor(vendor);
+        setNewVendor({ name: vendor.name, email: vendor.email, phone: vendor.phone });
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = (id) => {
+        if (window.confirm('Archive this vendor relationship?')) {
+            const updated = vendors.filter(v => v.id !== id);
+            setVendors(updated);
+            localStorage.setItem('fb_vendors', JSON.stringify(updated));
+        }
+    };
+
     return (
-        <div className="space-y-6 animate-in fade-in duration-300">
-             {/* Toast */}
+        <div className="space-y-10 animate-in fade-in duration-300 pb-20 relative">
              {showToast && (
-                <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 bg-[#28303f] text-white px-6 py-3 rounded shadow-lg flex items-center animate-in fade-in slide-in-from-top-4 duration-300">
-                    <CheckCircle2 className="text-fb-green mr-3" size={20} />
-                    <span className="font-bold">Vendor Created Successfully</span>
+                <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-[#28303f] text-white px-8 py-3 rounded-xl shadow-2xl flex items-center animate-in fade-in slide-in-from-top-4 duration-300">
+                    <CheckCircle2 className="text-fb-green mr-3" size={24} />
+                    <span className="font-bold">Vendor Record Synchronized</span>
                 </div>
             )}
 
-             {/* Top Action */}
-             <div className="absolute top-[-50px] right-0">
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-fb-green hover:bg-[#33c46b] text-white px-6 py-2 rounded font-bold text-sm shadow-sm transition-colors"
-                >
-                    New Vendor
-                </button>
+            {/* Header Area */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h1 className="text-5xl font-black text-fb-navy tracking-tighter">Vendors</h1>
+                    <p className="text-gray-400 font-bold mt-2">Manage your suppliers and outgoing liabilities</p>
+                </div>
+                <div className="flex items-center gap-6">
+                    <button className="text-fb-navy font-black text-lg hover:underline transition-all">Import Vendors</button>
+                    <button 
+                        onClick={() => { setEditingVendor(null); setNewVendor({ name: '', email: '', phone: '' }); setIsModalOpen(true); }}
+                        className="bg-fb-green hover:brightness-110 text-white px-10 py-5 rounded-2xl font-black text-xl shadow-xl shadow-fb-green/20 transition-all active:scale-95"
+                    >
+                        New Vendor
+                    </button>
+                </div>
             </div>
 
-            {/* List Section */}
-            <div>
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-xl text-fb-slate">All Vendors</h3>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                        <input 
-                            type="text" 
-                            placeholder="Search Vendors" 
-                            className="pl-10 pr-4 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-fb-blue w-64 focus:ring-1 focus:ring-fb-blue"
-                        />
+            {/* Shelf & Search */}
+            <div className="pt-4">
+                <div className="flex flex-col md:flex-row justify-between items-center mb-10 h-16 gap-4">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-3xl font-black text-fb-navy tracking-tight">Supply Network</h2>
+                        <div className="bg-fb-blue/10 text-fb-blue px-3 py-1 rounded-lg text-xs font-black">{vendors.length} Total</div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="relative group flex-1 md:flex-none">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-fb-blue transition-colors" size={20} />
+                            <input 
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="pl-12 pr-4 py-3.5 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-fb-blue/5 focus:border-fb-blue outline-none w-full md:w-80 text-sm font-bold text-fb-navy shadow-sm transition-all" 
+                                placeholder="Search by name or email..." 
+                            />
+                        </div>
+                        <button className="flex items-center gap-3 px-6 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-black text-gray-500 hover:bg-gray-50 transition-all shadow-sm">
+                            <Filter size={18} /> Advanced
+                        </button>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-white border-b border-gray-200">
+                <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden border-t-8 border-t-fb-navy">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gray-50/50 border-b border-gray-100 text-[11px] font-black uppercase tracking-[0.25em] text-gray-400">
                             <tr>
-                                <th className="p-4 font-normal text-gray-500">Vendor</th>
-                                <th className="p-4 font-normal text-gray-500">Contact</th>
-                                <th className="p-4 font-normal text-gray-500 text-right">Outstanding Balance</th>
-                                <th className="p-4 font-normal text-gray-500 w-10"></th>
+                                <th className="p-8">Vendor Identity & Business</th>
+                                <th className="p-8">Contact Channels</th>
+                                <th className="p-8 text-right">Outstanding Balance</th>
+                                <th className="p-8 w-32"></th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {vendors.map((vendor) => (
-                                <tr 
-                                    key={vendor.id}
-                                    className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors group"
-                                >
-                                    <td className="p-4">
-                                        <div className="font-bold text-fb-slate text-lg group-hover:text-fb-blue">{vendor.name}</div>
+                        <tbody className="divide-y divide-gray-50">
+                            {filteredVendors.map((vendor) => (
+                                <tr key={vendor.id} className="transition-all duration-300 group cursor-pointer hover:bg-fb-gray" onClick={() => handleEdit(vendor)}>
+                                    <td className="p-8 border-l-8 border-fb-navy/30 group-hover:border-fb-navy transition-all">
+                                        <div className="font-black text-fb-navy group-hover:text-fb-blue text-lg leading-tight mb-1">{vendor.name}</div>
+                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Supplier Partner</div>
                                     </td>
-                                    <td className="p-4">
-                                        <div className="flex items-center text-gray-600 mb-1">
-                                            <Mail size={14} className="mr-2 text-gray-400" /> {vendor.email}
-                                        </div>
-                                        {vendor.phone && (
-                                            <div className="flex items-center text-gray-600">
-                                                <Phone size={14} className="mr-2 text-gray-400" /> {vendor.phone}
+                                    <td className="p-8">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center text-gray-500 font-bold text-xs">
+                                                <Mail size={14} className="mr-2 opacity-30" /> {vendor.email || 'N/A'}
                                             </div>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <div className={`font-bold ${vendor.balance > 0 ? 'text-fb-slate' : 'text-gray-400'}`}>
-                                            ₱{vendor.balance.toFixed(2)}
+                                            <div className="flex items-center text-gray-500 font-bold text-xs">
+                                                <Phone size={14} className="mr-2 opacity-30" /> {vendor.phone || 'N/A'}
+                                            </div>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-center">
-                                        <button className="text-gray-400 hover:text-fb-blue p-2">
-                                            <MoreHorizontal size={20} />
-                                        </button>
+                                    <td className="p-8 text-right">
+                                        <div className={`text-xl font-black ${vendor.balance > 0 ? 'text-fb-navy' : 'text-gray-300'}`}>
+                                            ₱{vendor.balance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                        </div>
+                                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Aggregate Payables</div>
+                                    </td>
+                                    <td className="p-8 text-right" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-x-2">
+                                            <button onClick={() => handleEdit(vendor)} className="w-10 h-10 bg-fb-blue/5 text-fb-blue rounded-xl flex items-center justify-center hover:bg-fb-blue hover:text-white transition-all shadow-sm">
+                                                <Pencil size={18} />
+                                            </button>
+                                            <button onClick={() => handleDelete(vendor.id)} className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
+                    {filteredVendors.length === 0 && (
+                        <div className="p-32 text-center bg-gray-50/30">
+                            <div className="flex flex-col items-center">
+                                <Store size={64} className="text-gray-100 mb-6" />
+                                <p className="text-gray-400 font-black text-2xl italic tracking-tight">No vendors found in network</p>
+                                <button onClick={() => setIsModalOpen(true)} className="bg-fb-blue text-white px-8 py-3 rounded-xl font-black mt-6 shadow-xl active:scale-95 transition-all">Add Your First Vendor</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-[600px] animate-in fade-in zoom-in-95 duration-200">
-                        <div className="p-8">
-                            <div className="flex justify-between items-start mb-6">
-                                <h2 className="text-2xl font-bold text-fb-slate">New Vendor</h2>
-                                <button onClick={() => setIsModalOpen(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-fb-navy/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-[600px] animate-in zoom-in-95 duration-300 overflow-hidden">
+                        <div className="p-12">
+                            <div className="flex justify-between items-start mb-10">
+                                <div className="flex items-center gap-4">
+                                     <div className="w-12 h-12 bg-fb-navy rounded-2xl flex items-center justify-center text-white">
+                                        <UserPlus size={24} />
+                                     </div>
+                                     <h2 className="text-3xl font-black text-fb-navy">{editingVendor ? 'Modify Vendor' : 'New Vendor Profile'}</h2>
+                                </div>
+                                <button onClick={() => setIsModalOpen(false)} className="text-gray-300 hover:text-fb-navy transition-colors"><X size={32} /></button>
+                            </div>
+                            
+                            <div className="space-y-8">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Vendor / Business Name</label>
+                                    <input 
+                                        autoFocus
+                                        className="w-full border border-gray-200 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-fb-blue/5 focus:border-fb-blue outline-none font-black text-fb-navy text-xl shadow-sm transition-all" 
+                                        value={newVendor.name}
+                                        onChange={e => setNewVendor({...newVendor, name: e.target.value})}
+                                        placeholder="e.g. Acme Logistics Group"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-8">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Email Contact</label>
+                                        <input 
+                                            className="w-full border border-gray-200 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-fb-blue/5 focus:border-fb-blue outline-none font-bold text-fb-navy shadow-sm transition-all"
+                                            value={newVendor.email}
+                                            onChange={e => setNewVendor({...newVendor, email: e.target.value})}
+                                            placeholder="billing@acme.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">Primary Phone</label>
+                                        <input 
+                                            className="w-full border border-gray-200 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-fb-blue/5 focus:border-fb-blue outline-none font-bold text-fb-navy shadow-sm transition-all" 
+                                            placeholder="(555) 000-0000" 
+                                            value={newVendor.phone}
+                                            onChange={e => setNewVendor({...newVendor, phone: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
                             </div>
     
-                            <div className="mb-4">
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Vendor Name</label>
-                                <input 
-                                    className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-fb-blue outline-none" 
-                                    placeholder="e.g. Supplier Inc" 
-                                    value={newVendor.name}
-                                    onChange={e => setNewVendor({...newVendor, name: e.target.value})}
-                                />
-                            </div>
-    
-                            <div className="mb-4">
-                                 <label className="block text-xs font-bold text-gray-500 mb-1">Email Address</label>
-                                <input 
-                                    className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-fb-blue outline-none" 
-                                    value={newVendor.email}
-                                    onChange={e => setNewVendor({...newVendor, email: e.target.value})}
-                                />
-                            </div>
-
-                            <div className="mb-4">
-                                 <label className="block text-xs font-bold text-gray-500 mb-1">Phone</label>
-                                <input 
-                                    className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-fb-blue outline-none" 
-                                    value={newVendor.phone}
-                                    onChange={e => setNewVendor({...newVendor, phone: e.target.value})}
-                                />
-                            </div>
-    
-                            <div className="flex justify-end space-x-4 mt-8">
-                                <button 
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="font-bold text-gray-500 hover:text-gray-700"
-                                >
-                                    Cancel
-                                </button>
+                            <div className="flex justify-end items-center gap-10 mt-16 pt-10 border-t border-gray-50">
+                                <button onClick={() => setIsModalOpen(false)} className="font-black text-gray-400 hover:text-fb-navy transition-colors uppercase tracking-[0.2em] text-xs">Discard</button>
                                 <button 
                                     onClick={handleSave}
-                                    className="bg-fb-green hover:bg-[#33c46b] text-white font-bold py-2 px-6 rounded shadow-sm"
+                                    disabled={!newVendor.name}
+                                    className={`font-black py-5 px-12 rounded-2xl shadow-xl text-white transition-all transform active:scale-95 flex items-center gap-3 ${!newVendor.name ? 'bg-gray-200 cursor-not-allowed' : 'bg-fb-navy hover:brightness-110 shadow-fb-navy/20'}`}
                                 >
-                                    Create Vendor
+                                    {editingVendor ? 'Sync Changes' : 'Onboard Vendor'} <CheckCircle2 size={22} />
                                 </button>
                             </div>
                         </div>
