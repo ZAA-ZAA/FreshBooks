@@ -1,9 +1,18 @@
 /**
  * API Service Layer
  * Handles all communication with the Python/PostgreSQL backend
+ * - On localhost: use explicit backend URL (dev without proxy).
+ * - When accessed via Cloudflare tunnel or same host: use relative /api so
+ *   the browser sends same-origin requests (no CORS / mixed content).
  */
 
-const API_BASE_URL = 'http://localhost:5000/api';
+function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') return '/api'; // SSR / build
+  return window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : '/api';
+}
+const API_BASE_URL = getApiBaseUrl();
 
 // Store tenant ID in memory (set after login/init)
 let currentTenantId: string | null = null;

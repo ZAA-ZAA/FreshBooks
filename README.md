@@ -125,6 +125,19 @@ docker-compose down
 
 ---
 
+## Exposing with Cloudflare Tunnel (Docker)
+
+To access the app at a public URL (e.g. `https://zoen.divinelifemorialpark.com`):
+
+1. Run the app with Docker: `docker-compose up --build` (frontend on port **3000**, backend on **5000**).
+2. In Cloudflare Tunnel (`config.yml`), point **one** hostname to the frontend only:
+   - `service: http://localhost:3000`
+3. Run: `cloudflared tunnel run my-tunnel`.
+
+The frontend is configured so that when you open the site via the tunnel (not localhost), API calls use the same origin (`/api`). Vite proxies `/api` to the backend, so the tunnel only needs to target port 3000. No separate API hostname or CORS changes are required.
+
+---
+
 ## Troubleshooting
 
 - **“Unable to connect to backend”** — Make sure the backend is running (`python app.py` or Docker) and that `.env` (or Docker env) has the correct DB settings.
