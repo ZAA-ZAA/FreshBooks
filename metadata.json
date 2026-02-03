@@ -1,5 +1,5 @@
 {
-  "name": "FreshBooks Clone",
-  "description": "A high-fidelity frontend clone of the FreshBooks accounting software, featuring a public marketing site, authentication flow simulation, dashboard with analytics, and a fully functional invoice creator.",
+  "name": "BookFlow",
+  "description": "Invoicing and billing web app: clients, invoices, estimates, expenses, payments, and reports. React frontend with Python/Flask backend and PostgreSQL.",
   "requestFramePermissions": []
 }

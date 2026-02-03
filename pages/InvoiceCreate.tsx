@@ -1,8 +1,11 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, CheckCircle2, X, Info, Calendar as CalendarIcon, Search, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, CheckCircle2, X, Info, Calendar as CalendarIcon, Search, AlertCircle, Loader2, Download, Send } from 'lucide-react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { clientsApi, invoicesApi, estimatesApi, ClientData, InvoiceData, InvoiceItemData } from '../api';
+import { useAuth } from '../App';
+import { clientsApi, invoicesApi, estimatesApi, getTenantId, ClientData, InvoiceData, InvoiceItemData } from '../api';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const THEME_COLORS = [
   { id: 'purple', value: '#6d28d9' },
@@ -18,6 +21,8 @@ const FONTS = [
   { id: 'Classic', value: 'Georgia, serif' },
 ];
 
+// To use your own template images: add classic.png, modern.png, simple.png under public/templates/
+// then set preview to '/templates/classic.png', '/templates/modern.png', '/templates/simple.png'
 const TEMPLATES = [
   { id: 'Classic', label: 'Classic', preview: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBi5JfQo76F8meoJCcn4DRJfC2Dg-4qMsiOVJElMKKjEO6wpCEHFZZi4gBVSqxQC4TRcpOMYJztFVQVMV6UesABEFTy7VgfpLiQ4iEtcfIQ6MP_9bKljvZVhk-MUkjrpwYF1hZiw3_qxkyVeU9ZPWrHaH5mcpJNYEEF0cKfnZAt_WZgGvVfxEJJ2gppV_pTMx9Pn3kIp2c8W02rvgw2Xj8LR4AdWFustOctDryoR2rwlVDRQSZDtr5SLmSUh906P8eJpcS29HhkgNNN' },
   { id: 'Modern', label: 'Modern', preview: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBtFRYrPNjBU-3qjeXLMZotapgtSrqPcItiAlRM7TKXaikAtOjZOey-eGkv7zHHAjBovuOOHmi3bmcmGrho0rkV3yL3JF4aE-eCJC97tgeN35HqGuA8udNc6NNnXtzg4OX7fsEq-FpK22Rka2aYccVijTq_1yuITy_5vdwjTNehTkhi-9zScH3-mAPVBAhNEwI74nLapGDr4b2ddjkhR-CbnkbthByOWGcOrkmEauwsBjf7rdQ-O2tKzcYs5axR7e5e5bc1tpOAxYrS' },
@@ -28,6 +33,7 @@ export default function InvoiceCreate() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
+  const { tenant } = useAuth();
   
   const isNew = location.pathname.includes('new');
   const isEstimate = location.pathname.includes('estimate') || location.pathname.includes('estimates');
@@ -62,11 +68,28 @@ export default function InvoiceCreate() {
   const [activeTaxItem, setActiveTaxItem] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
 
-  // Business Info
+  // Logo upload & crop
+  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [showLogoCropModal, setShowLogoCropModal] = useState(false);
+  const [cropSource, setCropSource] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [cropDragStart, setCropDragStart] = useState<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const logoCanvasRef = useRef<HTMLCanvasElement>(null);
+  const logoImageRef = useRef<HTMLImageElement | null>(null);
+  const documentPreviewRef = useRef<HTMLDivElement>(null);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendToEmail, setSendToEmail] = useState('');
+  const [attachPdf, setAttachPdf] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  // Business Info (from tenant when logged in)
   const [businessInfo, setBusinessInfo] = useState({
-    name: 'Demo',
-    phone: '0912',
-    country: 'Philippines',
+    name: '',
+    phone: '',
+    country: '',
     address1: '',
     address2: '',
     city: '',
@@ -77,10 +100,181 @@ export default function InvoiceCreate() {
   });
 
   const clientDropdownRef = useRef(null);
+  const LOGO_W = 176;
+  const LOGO_H = 112;
+
+  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropSource(reader.result as string);
+      setCropZoom(1);
+      setCropOffset({ x: 0, y: 0 });
+      setShowLogoCropModal(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const drawCropPreview = () => {
+    if (!cropSource || !logoImageRef.current || !logoCanvasRef.current) return;
+    const img = logoImageRef.current;
+    if (!img.complete) return;
+    const canvas = logoCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width = LOGO_W;
+    canvas.height = LOGO_H;
+    ctx.clearRect(0, 0, LOGO_W, LOGO_H);
+    const scale = cropZoom;
+    ctx.drawImage(img, -cropOffset.x, -cropOffset.y, img.naturalWidth * scale, img.naturalHeight * scale);
+  };
+
+  useEffect(() => {
+    if (showLogoCropModal && cropSource) drawCropPreview();
+  }, [showLogoCropModal, cropSource, cropZoom, cropOffset]);
+
+  const applyLogoCrop = async () => {
+    if (!logoCanvasRef.current) return;
+    const dataUrl = logoCanvasRef.current.toDataURL('image/png');
+    setLogoUrl(dataUrl);
+    const tid = getTenantId();
+    if (tid) try { localStorage.setItem('bookflow_tenant_logo_' + tid, dataUrl); } catch (_) {}
+    setShowLogoCropModal(false);
+    setCropSource(null);
+  };
+
+  const getCropMaxOffset = () => {
+    const img = logoImageRef.current;
+    if (!img || !img.complete) return { maxX: 0, maxY: 0 };
+    const scaledW = img.naturalWidth * cropZoom;
+    const scaledH = img.naturalHeight * cropZoom;
+    return {
+      maxX: Math.max(0, scaledW - LOGO_W),
+      maxY: Math.max(0, scaledH - LOGO_H),
+    };
+  };
+
+  const handleCropMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setCropDragStart({ startX: e.clientX, startY: e.clientY, offsetX: cropOffset.x, offsetY: cropOffset.y });
+  };
+  const handleCropMouseMove = (e: React.MouseEvent) => {
+    if (cropDragStart == null) return;
+    const deltaX = e.clientX - cropDragStart.startX;
+    const deltaY = e.clientY - cropDragStart.startY;
+    const { maxX, maxY } = getCropMaxOffset();
+    const newX = Math.max(0, Math.min(maxX, cropDragStart.offsetX - deltaX));
+    const newY = Math.max(0, Math.min(maxY, cropDragStart.offsetY - deltaY));
+    setCropOffset({ x: newX, y: newY });
+  };
+  const handleCropMouseUp = () => setCropDragStart(null);
+
+  useEffect(() => {
+    if (!cropDragStart) return;
+    const onMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - cropDragStart.startX;
+      const deltaY = e.clientY - cropDragStart.startY;
+      const img = logoImageRef.current;
+      if (!img || !img.complete) return;
+      const scaledW = img.naturalWidth * cropZoom;
+      const scaledH = img.naturalHeight * cropZoom;
+      const maxX = Math.max(0, scaledW - LOGO_W);
+      const maxY = Math.max(0, scaledH - LOGO_H);
+      const newX = Math.max(0, Math.min(maxX, cropDragStart.offsetX - deltaX));
+      const newY = Math.max(0, Math.min(maxY, cropDragStart.offsetY - deltaY));
+      setCropOffset({ x: newX, y: newY });
+    };
+    const onUp = () => setCropDragStart(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [cropDragStart, cropZoom]);
+
+  const handleDownloadPdf = async () => {
+    if (!documentPreviewRef.current) return;
+    setIsExportingPdf(true);
+    try {
+      const canvas = await html2canvas(documentPreviewRef.current, { scale: 2, useCORS: true, logging: false });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const w = pdf.internal.pageSize.getWidth();
+      const h = (canvas.height * w) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+      pdf.save(`${documentType}-${docNumber || 'draft'}.pdf`);
+    } catch (e) {
+      setError('Failed to generate PDF.');
+    }
+    setIsExportingPdf(false);
+  };
+
+  const handleSendEmail = async () => {
+    const to = sendToEmail.trim();
+    if (!to) { setError('Enter recipient email.'); return; }
+    const emailErr = (await import('../utils/validation')).getEmailError(to);
+    if (emailErr) { setError(emailErr); return; }
+    const docId = id;
+    if (!docId) { setError('Save the document first, then send.'); return; }
+    setIsSendingEmail(true);
+    setError(null);
+    let pdfBase64: string | undefined;
+    if (attachPdf && documentPreviewRef.current) {
+      try {
+        const canvas = await html2canvas(documentPreviewRef.current, { scale: 2, useCORS: true, logging: false });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const w = pdf.internal.pageSize.getWidth();
+        const h = (canvas.height * w) / canvas.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+        const dataUrl = pdf.output('dataurlstring') || pdf.output('datauristring') || '';
+        pdfBase64 = (dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl) || '';
+      } catch (_) {}
+    }
+    const api = isEstimate ? estimatesApi : invoicesApi;
+    const sendRes = await api.sendEmail(docId, to, { attachPdf: !!pdfBase64, pdfBase64 });
+    if (sendRes?.success) {
+      setShowSendModal(false);
+      setSendToEmail('');
+      setShowToast(true);
+    } else {
+      setError(sendRes?.error || 'Failed to send email.');
+    }
+    setIsSendingEmail(false);
+  };
+
+  const TOAST_DURATION_MS = 4000;
+
+  useEffect(() => {
+    if (tenant) {
+      setBusinessInfo(prev => ({
+        ...prev,
+        name: tenant.name || prev.name || 'Company',
+        phone: tenant.phone || prev.phone || '',
+        country: tenant.country || tenant.address || prev.country || '',
+      }));
+    }
+  }, [tenant]);
+
+  useEffect(() => {
+    const tid = getTenantId();
+    if (tid) {
+      try {
+        const saved = localStorage.getItem('bookflow_tenant_logo_' + tid);
+        if (saved) setLogoUrl(saved);
+      } catch (_) {}
+    }
+  }, [tenant?.id]);
 
   useEffect(() => {
     loadInitialData();
   }, [id, isNew]);
+
+  useEffect(() => {
+    if (!showToast) return;
+    const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [showToast]);
 
   const loadInitialData = async () => {
     setIsLoading(true);
@@ -139,9 +333,13 @@ export default function InvoiceCreate() {
   const total = subtotal + totalTax - discountAmount;
 
   const handleSave = async (status: string = 'Draft') => {
-    // Validation: Client is required
     if (!client) {
       setError(`Please select a client before saving the ${documentType.toLowerCase()}.`);
+      return;
+    }
+    const validItems = items.filter(i => (i.name && i.name.trim()) || (i.rate != null && Number(i.rate) > 0));
+    if (validItems.length === 0) {
+      setError(`Add at least one line item with a name or rate before saving.`);
       return;
     }
 
@@ -218,10 +416,15 @@ export default function InvoiceCreate() {
                     <h2 className="text-4xl font-black text-fb-navy tracking-tight">{isNew ? `New ${documentType}` : `Edit ${documentType}`}</h2>
                     <div className="flex items-center gap-4">
                         <button onClick={() => navigate(-1)} className="text-sm font-bold text-fb-navy hover:underline px-4">Cancel</button>
+                        <button onClick={handleDownloadPdf} disabled={isExportingPdf} className="text-sm font-bold text-fb-navy hover:bg-gray-100 px-4 py-2.5 rounded-lg border border-gray-200 flex items-center gap-2 disabled:opacity-50">
+                            <Download size={18} /> {isExportingPdf ? 'Generating...' : 'Download PDF'}
+                        </button>
                         <button onClick={() => handleSave('Draft')} disabled={isSaving} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base disabled:opacity-50">
                             {isSaving ? 'Saving...' : 'Save'}
                         </button>
-                        <button onClick={() => handleSave('Sent')} disabled={isSaving} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base disabled:opacity-50">Send To...</button>
+                        <button onClick={() => { setSendToEmail(client?.email || ''); setShowSendModal(true); setError(null); }} disabled={!client} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all text-base disabled:opacity-50 flex items-center gap-2">
+                            <Send size={18} /> Send To...
+                        </button>
                     </div>
                 </div>
 
@@ -234,8 +437,8 @@ export default function InvoiceCreate() {
                     </div>
                 )}
 
-                {/* Document Canvas */}
-                <div className={`bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden relative min-h-[1000px] transition-all duration-500 ${template === 'Modern' ? 'pt-0' : 'p-16'}`}>
+                {/* Document Canvas (ref for PDF export) */}
+                <div ref={documentPreviewRef} className={`bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden relative min-h-[1000px] transition-all duration-500 ${template === 'Modern' ? 'pt-0' : 'p-16'}`}>
                     
                     {/* Modern Template Header */}
                     {template === 'Modern' && (
@@ -261,10 +464,20 @@ export default function InvoiceCreate() {
                                     <p className="text-gray-400 text-sm font-medium">{businessInfo.phone}</p>
                                     <button onClick={() => setShowBusinessModal(true)} className="text-[11px] font-black text-fb-blue hover:underline uppercase tracking-widest mt-2">Edit Business Info</button>
                                 </div>
-                                <div className="w-44 h-28 border-2 border-dashed border-gray-100 rounded-xl flex flex-col items-center justify-center text-gray-300 cursor-pointer hover:bg-gray-50 transition-colors group">
-                                    <ImageIcon size={24} className="mb-2 group-hover:scale-110 transition-transform" />
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-center px-4">Upload Logo</p>
+                                <div
+                                    className="w-44 h-28 border-2 border-dashed border-gray-100 rounded-xl flex flex-col items-center justify-center text-gray-300 cursor-pointer hover:bg-gray-50 transition-colors group overflow-hidden"
+                                    onClick={() => logoFileInputRef.current?.click()}
+                                >
+                                    {logoUrl ? (
+                                        <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                                    ) : (
+                                        <>
+                                            <ImageIcon size={24} className="mb-2 group-hover:scale-110 transition-transform" />
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-center px-4">Upload Logo</p>
+                                        </>
+                                    )}
                                 </div>
+                                <input type="file" accept="image/*" className="hidden" ref={logoFileInputRef} onChange={handleLogoFileSelect} />
                             </div>
                         )}
 
@@ -496,11 +709,11 @@ export default function InvoiceCreate() {
                                     <select 
                                         value={FONTS.find(f => f.value === fontFamily)?.id} 
                                         onChange={e => setFontFamily(FONTS.find(f => f.id === e.target.value).value)} 
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-black text-fb-navy text-sm shadow-inner appearance-none cursor-pointer"
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-black text-fb-navy text-sm appearance-none cursor-pointer pr-12"
                                     >
                                         {FONTS.map(f => <option key={f.id} value={f.id}>{f.id} Serif</option>)}
                                     </select>
-                                    <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={20} />
+                                    <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
                                 </div>
                             </div>
                         </div>
@@ -543,6 +756,68 @@ export default function InvoiceCreate() {
                         <div className="flex justify-end gap-10 mt-16 pt-10 border-t border-gray-100">
                              <button onClick={() => setShowBusinessModal(false)} className="text-xs font-black text-gray-400 hover:text-fb-navy uppercase tracking-[0.2em]">Cancel</button>
                              <button onClick={() => setShowBusinessModal(false)} className="bg-fb-green text-white px-12 py-4 rounded-2xl font-black shadow-xl shadow-fb-green/20 hover:brightness-110 transition-all">Apply Changes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Send to Email Modal */}
+        {showSendModal && (
+            <div className="fixed inset-0 z-[305] flex items-center justify-center bg-fb-navy/70 backdrop-blur-md p-4 animate-in fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div className="p-8">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black text-fb-navy">Send {documentType}</h2>
+                            <button onClick={() => { setShowSendModal(false); setSendToEmail(''); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={24} /></button>
+                        </div>
+                        <div className="mb-6">
+                            <label className="block text-sm font-bold text-gray-600 mb-2">To (email)</label>
+                            <input type="email" value={sendToEmail} onChange={e => setSendToEmail(e.target.value)} placeholder="client@example.com" className="w-full border border-gray-200 rounded-xl px-4 py-3 font-medium focus:ring-2 ring-fb-blue outline-none" />
+                        </div>
+                        <div className="mb-6 flex items-center gap-3">
+                            <input type="checkbox" id="attach-pdf" checked={attachPdf} onChange={e => setAttachPdf(e.target.checked)} className="rounded border-gray-300 text-fb-blue focus:ring-fb-blue" />
+                            <label htmlFor="attach-pdf" className="text-sm font-medium text-gray-700">Attach PDF to email</label>
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => { setShowSendModal(false); setSendToEmail(''); }} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+                            <button onClick={handleSendEmail} disabled={isSendingEmail} className="px-6 py-2 bg-fb-green text-white font-black rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
+                                {isSendingEmail ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Logo Crop Modal */}
+        {showLogoCropModal && cropSource && (
+            <div className="fixed inset-0 z-[310] flex items-center justify-center bg-fb-navy/80 backdrop-blur-md p-4 animate-in fade-in">
+                <img ref={logoImageRef} src={cropSource} alt="" className="hidden" onLoad={drawCropPreview} />
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-black text-fb-navy">Adjust logo</h2>
+                            <button onClick={() => { setShowLogoCropModal(false); setCropSource(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+                        </div>
+                        <p className="text-xs text-gray-500 mb-4">Drag to position, use zoom to fit. Then click Apply.</p>
+                        <div
+                            className="border-2 border-dashed border-gray-200 rounded-xl overflow-hidden bg-gray-50 cursor-move select-none mx-auto"
+                            style={{ width: LOGO_W, height: LOGO_H }}
+                            onMouseDown={handleCropMouseDown}
+                            onMouseMove={handleCropMouseMove}
+                            onMouseUp={handleCropMouseUp}
+                            onMouseLeave={handleCropMouseUp}
+                        >
+                            <canvas ref={logoCanvasRef} width={LOGO_W} height={LOGO_H} className="block w-full h-full" />
+                        </div>
+                        <div className="mt-4">
+                            <label className="block text-xs font-bold text-gray-500 mb-2">Zoom</label>
+                            <input type="range" min="0.3" max="3" step="0.1" value={cropZoom} onChange={e => setCropZoom(parseFloat(e.target.value))} className="w-full accent-fb-blue" />
+                        </div>
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button onClick={() => { setShowLogoCropModal(false); setCropSource(null); }} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+                            <button onClick={applyLogoCrop} className="px-6 py-2 bg-fb-green text-white font-black rounded-lg hover:brightness-110">Apply</button>
                         </div>
                     </div>
                 </div>

@@ -213,7 +213,7 @@ export default function Pricing() {
                         {[
                             { name: 'Advanced Payments', price: '$20/mo', included: [false, false, false, true] },
                             { name: 'Team Members (per person)', price: '$11/mo', included: [false, false, false, false] },
-                            { name: 'FreshBooks Payroll', price: '$40/mo + $6/user', included: [false, false, false, false] }
+                            { name: 'BookFlow Payroll', price: '$40/mo + $6/user', included: [false, false, false, false] }
                         ].map((row, i) => (
                             <div key={i} className="p-5 grid grid-cols-5 items-center hover:bg-gray-50 transition-colors">
                                 <div className="font-medium flex items-center">
@@ -246,7 +246,7 @@ export default function Pricing() {
                                 <span className="font-bold text-blue-100">4.5 Outstanding</span>
                             </div>
                             <p className="text-xl leading-relaxed mb-10 text-blue-50 font-medium">
-                                "FreshBooks offers a well-rounded, intuitive, and attractive double-entry accounting experience. It anticipates the needs of freelancers and small businesses well—better than competitors in this class."
+                                "BookFlow offers a well-rounded, intuitive, and attractive double-entry accounting experience. It anticipates the needs of freelancers and small businesses well—better than competitors in this class."
                             </p>
                             <div className="text-2xl font-black italic tracking-tighter opacity-60 group-hover:opacity-100 transition-opacity uppercase">PCMAG.COM</div>
                         </div>
@@ -259,7 +259,7 @@ export default function Pricing() {
                                 <span className="font-bold text-blue-100">4.5 Excellent</span>
                             </div>
                             <p className="text-xl leading-relaxed mb-10 text-blue-50 font-medium">
-                                "FreshBooks automates daily accounting activities namely invoice creation, payment acceptance, expenses tracking, billable time tracking, and financial reporting."
+                                "BookFlow automates daily accounting activities namely invoice creation, payment acceptance, expenses tracking, billable time tracking, and financial reporting."
                             </p>
                             <div className="text-2xl font-black italic tracking-tighter opacity-60 group-hover:opacity-100 transition-opacity uppercase">Capterra</div>
                         </div>
@@ -272,7 +272,7 @@ export default function Pricing() {
                                 <span className="font-bold text-blue-100">4.5 Excellent</span>
                             </div>
                             <p className="text-xl leading-relaxed mb-10 text-blue-50 font-medium">
-                                "FreshBooks is an online accounting and invoicing service that saves you time and makes you look professional – Fortune 500 professional."
+                                "BookFlow is an online accounting and invoicing service that saves you time and makes you look professional – Fortune 500 professional."
                             </p>
                             <div className="text-2xl font-black italic tracking-tighter opacity-60 group-hover:opacity-100 transition-opacity uppercase">G2</div>
                         </div>
@@ -285,7 +285,7 @@ export default function Pricing() {
                                 <span className="font-bold text-blue-100">4.7 Excellent</span>
                             </div>
                             <p className="text-xl leading-relaxed mb-10 text-blue-50 font-medium">
-                                "FreshBooks makes it easy to stay organized, keep track of payments owed and expenses made, send invoices and accept payments."
+                                "BookFlow makes it easy to stay organized, keep track of payments owed and expenses made, send invoices and accept payments."
                             </p>
                             <div className="text-2xl font-black italic tracking-tighter opacity-60 group-hover:opacity-100 transition-opacity uppercase">Forbes</div>
                         </div>
@@ -314,7 +314,7 @@ export default function Pricing() {
                     </div>
                     <h3 className="text-2xl font-bold text-fb-slate mb-4">100% safe and secure</h3>
                     <p className="text-gray-500 leading-relaxed text-lg">
-                        FreshBooks protects your personal info and your client's info with industry-standard SSL and encryption so everything is always safe and secure.
+                        BookFlow protects your personal info and your client's info with industry-standard SSL and encryption so everything is always safe and secure.
                     </p>
                 </div>
                 <div className="flex flex-col items-center group">
@@ -323,7 +323,7 @@ export default function Pricing() {
                     </div>
                     <h3 className="text-2xl font-bold text-fb-slate mb-4">Satisfaction guarantee</h3>
                     <p className="text-gray-500 leading-relaxed text-lg">
-                        Buy a plan or sign up for a free trial. FreshBooks promises that if you aren't satisfied you can contact us anytime within the first 30 days after your purchase for a full refund.
+                        Buy a plan or sign up for a free trial. BookFlow promises that if you aren't satisfied you can contact us anytime within the first 30 days after your purchase for a full refund.
                     </p>
                 </div>
             </div>
@@ -335,13 +335,13 @@ export default function Pricing() {
                     
                     <div className="space-y-4">
                         <FAQItem question="How does the 30-day free trial work?">
-                            When you sign up, you'll have full access to all FreshBooks features for 30 days. No credit card is required. At the end of your trial, you can choose a plan that fits your business needs.
+                            When you sign up, you'll have full access to all BookFlow features for 30 days. No credit card is required. At the end of your trial, you can choose a plan that fits your business needs.
                         </FAQItem>
                         <FAQItem question="What happens after my free trial?">
                             Your account will be suspended unless you choose a paid plan. Your data remains safe, and you can reactive it anytime by selecting a subscription.
                         </FAQItem>
                         <FAQItem question="Do I need to install any software?">
-                            No! FreshBooks is 100% cloud-based. You just need a web browser or our mobile app.
+                            No! BookFlow is 100% cloud-based. You just need a web browser or our mobile app.
                         </FAQItem>
                         <FAQItem question="Is my data safe?">
                             Yes. We use industry-standard encryption and security protocols to ensure your data is always protected and backed up.
@@ -349,10 +349,10 @@ export default function Pricing() {
                         <FAQItem question="What if I need help getting started?">
                             Our award-winning support team is available via chat, email, and phone to help you with any questions.
                         </FAQItem>
-                        <FAQItem question="How do client limits work in FreshBooks pricing?">
+                        <FAQItem question="How do client limits work in BookFlow pricing?">
                             Each plan allows a certain number of active clients. An active client is someone you've sent an invoice or estimate to within the last year.
                         </FAQItem>
-                        <FAQItem question="How much does FreshBooks charge per transaction?">
+                        <FAQItem question="How much does BookFlow charge per transaction?">
                             Payment processing fees depend on your region and payment method. For US credit cards, it typically starts at 2.9% + $0.30 per transaction.
                         </FAQItem>
                     </div>
@@ -465,7 +465,7 @@ export default function Pricing() {
                     
                     <div className="mt-20 pt-10 border-t border-gray-100 flex flex-col lg:flex-row items-center justify-between text-gray-400 text-xs font-medium gap-6">
                         <div className="flex flex-col md:flex-row items-center gap-6">
-                            <span>© 2026 FreshBooks</span>
+                            <span>© 2026 BookFlow</span>
                             <span className="hidden md:block">|</span>
                             <span className="flex items-center"><HelpCircle size={14} className="mr-1" /> Call Toll Free: 1-888-674-3175</span>
                         </div>

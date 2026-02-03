@@ -56,7 +56,7 @@ export default function Home() {
           <div className="relative animate-in slide-in-from-right-8 duration-700">
             <div className="rounded-2xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] overflow-hidden transform lg:translate-x-12 translate-y-6">
               <img 
-                alt="FreshBooks Dashboard" 
+                alt="BookFlow Dashboard" 
                 className="w-full h-auto" 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtFRYrPNjBU-3qjeXLMZotapgtSrqPcItiAlRM7TKXaikAtOjZOey-eGkv7zHHAjBovuOOHmi3bmcmGrho0rkV3yL3JF4aE-eCJC97tgeN35HqGuA8udNc6NNnXtzg4OX7fsEq-FpK22Rka2aYccVijTq_1yuITy_5vdwjTNehTkhi-9zScH3-mAPVBAhNEwI74nLapGDr4b2ddjkhR-CbnkbthByOWGcOrkmEauwsBjf7rdQ-O2tKzcYs5axR7e5e5bc1tpOAxYrS"
               />
@@ -72,7 +72,7 @@ export default function Home() {
         </div>
 
         <div className="mt-24 mx-auto max-w-[1440px] px-6 lg:px-12">
-            <p className="text-white text-lg font-black mb-10 opacity-90">Customers and experts recommend FreshBooks</p>
+            <p className="text-white text-lg font-black mb-10 opacity-90">Customers and experts recommend BookFlow</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 pb-12">
                 <RatingsBlock score="4.5 Excellent" site="PCMag.com" />
                 <RatingsBlock score="4.5 Excellent" site="G2.com" />
@@ -181,7 +181,7 @@ export default function Home() {
       <section className="py-32 bg-fb-cream">
          <div className="mx-auto max-w-[1440px] px-6 lg:px-12">
             <h2 className="text-4xl lg:text-7xl font-black text-fb-navy leading-[1.1] mb-16 tracking-tight">
-                Use FreshBooks <br/><span className="text-fb-blue">your way</span>
+                Use BookFlow <br/><span className="text-fb-blue">your way</span>
             </h2>
 
             <div className="relative rounded-[60px] overflow-hidden aspect-[21/9] mb-[-140px] shadow-2xl">
@@ -211,7 +211,7 @@ export default function Home() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <div className="lg:col-span-7 bg-fb-cream rounded-[40px] p-16 flex flex-col justify-between relative overflow-hidden min-h-[480px]">
                       <div className="relative z-10">
-                          <h2 className="text-4xl lg:text-6xl font-black text-fb-navy mb-12 max-w-md leading-tight">More reasons to love FreshBooks</h2>
+                          <h2 className="text-4xl lg:text-6xl font-black text-fb-navy mb-12 max-w-md leading-tight">More reasons to love BookFlow</h2>
                           <div className="flex flex-wrap gap-6">
                               <button onClick={() => navigate('/pricing')} className="bg-fb-green hover:brightness-110 text-white px-10 py-5 rounded-lg font-black text-lg shadow-xl transition-all">Buy Now & Save</button>
                               <button onClick={() => navigate('/signup')} className="bg-white border-2 border-fb-navy text-fb-navy px-10 py-4 rounded-lg font-black text-lg hover:bg-fb-navy hover:text-white transition-all">Try It Free</button>
@@ -229,7 +229,7 @@ export default function Home() {
                               <span className="text-8xl font-black tracking-tighter">553</span>
                               <span className="text-4xl font-black text-blue-200 uppercase">hrs</span>
                           </div>
-                          <p className="text-2xl font-bold text-blue-50 mt-6 leading-relaxed">Save up to 553 hours each year by using FreshBooks</p>
+                          <p className="text-2xl font-bold text-blue-50 mt-6 leading-relaxed">Save up to 553 hours each year by using BookFlow</p>
                       </div>
                   </div>
 
@@ -237,7 +237,7 @@ export default function Home() {
                       <Globe size={40} className="text-blue-400" />
                       <div>
                           <span className="text-7xl font-black">160+</span>
-                          <p className="text-xl font-bold text-blue-100 mt-4">Countries have used FreshBooks</p>
+                          <p className="text-xl font-bold text-blue-100 mt-4">Countries have used BookFlow</p>
                       </div>
                   </div>
 
@@ -303,13 +303,13 @@ export default function Home() {
               <h2 className="text-4xl lg:text-6xl font-black text-fb-navy text-center mb-20 tracking-tight">Frequently Asked Questions</h2>
               <div className="space-y-4">
                   <FAQItem question="What do I get in my 30-day free trial?">
-                      You'll have full access to all FreshBooks features for 30 days. No credit card is required. You can send invoices, track time, and manage expenses immediately.
+                      You'll have full access to all BookFlow features for 30 days. No credit card is required. You can send invoices, track time, and manage expenses immediately.
                   </FAQItem>
-                  <FAQItem question="Which FreshBooks plan is right for me?">
+                  <FAQItem question="Which BookFlow plan is right for me?">
                       It depends on the size of your business and how many clients you bill. The Lite plan is perfect for freelancers with up to 5 clients, while Premium is best for growing teams.
                   </FAQItem>
-                  <FAQItem question="How does FreshBooks work?">
-                      FreshBooks is cloud-based, meaning your data is always backed up and accessible from any device. We automate invoicing, bookkeeping, and payroll to save you hours of admin.
+                  <FAQItem question="How does BookFlow work?">
+                      BookFlow is cloud-based, meaning your data is always backed up and accessible from any device. We automate invoicing, bookkeeping, and payroll to save you hours of admin.
                   </FAQItem>
                   <FAQItem question="Is my data safe?">
                       Yes. We use industry-standard SSL encryption and multiple redundant servers to ensure your data is safe and available 24/7.

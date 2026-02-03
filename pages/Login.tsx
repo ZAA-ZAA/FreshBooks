@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../App';
 import { Lock, ShieldCheck, HelpCircle, Globe, ArrowLeft, AlertCircle } from 'lucide-react';
+import { getEmailError, isRequired } from '../utils/validation';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,6 +16,9 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const emailErr = getEmailError(formData.email);
+    if (emailErr) { setError(emailErr); return; }
+    if (!isRequired(formData.password)) { setError('Password is required.'); return; }
     setIsLoading(true);
 
     try {
@@ -56,9 +60,9 @@ export default function Login() {
              <div className="bg-[#0075dd] p-2 rounded-lg">
                 <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
              </div>
-             <span className="text-3xl font-black text-[#002a63] tracking-tight">FreshBooks</span>
+             <span className="text-3xl font-black text-[#002a63] tracking-tight">BookFlow</span>
           </div>
-          <h1 className="text-2xl font-bold text-[#002a63]">Log in to FreshBooks</h1>
+          <h1 className="text-2xl font-bold text-[#002a63]">Log in to BookFlow</h1>
         </div>
 
         {error && (
@@ -132,7 +136,7 @@ export default function Login() {
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-700">
             <strong>Default Login:</strong><br />
-            Email: admin@freshbooks.local<br />
+            Email: admin@bookflow.local<br />
             Password: admin123
           </p>
         </div>

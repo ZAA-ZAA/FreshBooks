@@ -19,9 +19,17 @@ export default function ItemsList() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const TOAST_DURATION_MS = 4000;
+
     useEffect(() => {
         loadItems();
     }, []);
+
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [showToast]);
 
     const loadItems = async () => {
         setIsLoading(true);
@@ -64,7 +72,6 @@ export default function ItemsList() {
             setIsModalOpen(false);
             setEditingItem(null);
             setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
             setNewItem({ name: '', description: '', rate: '' });
         } else {
             setError(response.error || 'Failed to save item');

@@ -21,10 +21,18 @@ export default function BillsList() {
     const [searchTerm, setSearchTerm] = useState('');
     const [newBill, setNewBill] = useState({ vendor: '', date: '', details: '', amount: '' });
 
+    const TOAST_DURATION_MS = 4000;
+
     useEffect(() => {
         const stored = localStorage.getItem('fb_bills');
         if (stored) setBills(JSON.parse(stored));
     }, []);
+
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [showToast]);
 
     const filteredBills = bills.filter(b => 
         b.vendor.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -46,7 +54,6 @@ export default function BillsList() {
 
         setIsModalOpen(false);
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
         setNewBill({ vendor: '', date: '', details: '', amount: '' });
     };
 

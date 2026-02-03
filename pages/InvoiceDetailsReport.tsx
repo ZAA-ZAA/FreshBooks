@@ -5,7 +5,10 @@ import {
     ChevronLeft, ChevronDown, Printer, Download, Search, X, 
     Calendar, Filter, FileText, MoreHorizontal, Send, ChevronRight, Loader2
 } from 'lucide-react';
-import { invoicesApi, clientsApi, InvoiceData, ClientData } from '../api';
+import { invoicesApi, clientsApi, reportsApi, InvoiceData, ClientData } from '../api';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { getEmailError } from '../utils/validation';
 
 export default function InvoiceDetailsReport() {
     const navigate = useNavigate();
@@ -21,8 +24,15 @@ export default function InvoiceDetailsReport() {
     const [invoices, setInvoices] = useState<InvoiceData[]>([]);
     const [clients, setClients] = useState<ClientData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [showSendModal, setShowSendModal] = useState(false);
+    const [sendToEmail, setSendToEmail] = useState('');
+    const [attachPdf, setAttachPdf] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [sendError, setSendError] = useState<string | null>(null);
+    const [sendSuccess, setSendSuccess] = useState(false);
 
     const actionsRef = useRef(null);
+    const reportContentRef = useRef(null);
 
     useEffect(() => {
         loadData();
@@ -99,6 +109,104 @@ export default function InvoiceDetailsReport() {
         setShowActions(false);
     };
 
+    const handleExportExcel = () => {
+        setShowActions(false);
+        const headers = ['Client Name', 'Invoice #', 'Date Issued', 'Date Due', 'Invoice Status', 'Date Paid', 'Item Name', 'Item Description', 'Rate', 'Quantity', 'Discount Percentage', 'Line Subtotal', 'Tax 1 Type', 'Tax 1 Amount', 'Tax 2 Type', 'Tax 2 Amount', 'Line Total', 'Currency'];
+        let filtered = invoices;
+        if (statusFilter !== 'All Statuses') filtered = filtered.filter(i => i.status === statusFilter);
+        if (clientFilter !== 'All Clients') filtered = filtered.filter(i => i.client === clientFilter);
+
+        const rows = [headers];
+        filtered.forEach(inv => {
+            const clientName = inv.client || '';
+            const invNum = inv.number || '';
+            const dateIssued = inv.date_issued || inv.date || '';
+            const dateDue = inv.date_due || '';
+            const status = inv.status || '';
+            const datePaid = inv.status === 'Paid' ? (dateIssued || '') : '';
+            const discountPct = (inv.discount != null ? inv.discount : 0);
+            const items = inv.items || [];
+            if (items.length === 0) {
+                rows.push([clientName, invNum, dateIssued, dateDue, status, datePaid, '', '', '', '', discountPct, '', '', 0, '', 0, inv.total != null ? inv.total : '', 'PHP']);
+            } else {
+                items.forEach((item, idx) => {
+                    const rate = item.rate != null ? item.rate : 0;
+                    const qty = item.qty != null ? item.qty : 1;
+                    const lineSub = rate * qty;
+                    const tax1 = (item.tax != null ? item.tax : 0);
+                    const tax1Amt = lineSub * (tax1 / 100);
+                    rows.push([
+                        clientName,
+                        invNum,
+                        dateIssued,
+                        dateDue,
+                        status,
+                        datePaid,
+                        item.name || '',
+                        item.description || '',
+                        rate,
+                        qty,
+                        idx === 0 ? discountPct : 0,
+                        lineSub,
+                        'hidden',
+                        tax1Amt,
+                        '',
+                        0,
+                        lineSub + tax1Amt,
+                        'PHP'
+                    ]);
+                });
+            }
+        });
+
+        const escape = (v) => {
+            const s = v == null ? '' : String(v);
+            return s.replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
+        };
+        const csv = rows.map(r => r.map(escape).join('\t')).join('\r\n');
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice-details-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleSendReport = async () => {
+        const to = sendToEmail.trim();
+        if (!to) { setSendError('Enter recipient email.'); return; }
+        const err = getEmailError(to);
+        if (err) { setSendError(err); return; }
+        setIsSendingEmail(true);
+        setSendError(null);
+        setSendSuccess(false);
+        let pdfBase64 = '';
+        if (attachPdf && reportContentRef.current) {
+            try {
+                const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, logging: false });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const w = pdf.internal.pageSize.getWidth();
+                const h = (canvas.height * w) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+                const dataUrl = pdf.output('dataurlstring') || pdf.output('datauristring') || '';
+                pdfBase64 = (dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl) || '';
+            } catch (_) {}
+        }
+        const res = await reportsApi.sendEmail(to, { attachPdf: !!pdfBase64, pdfBase64, pdfFilename: 'invoice-details-report.pdf' });
+        if (res?.success) {
+            setShowSendModal(false);
+            setSendToEmail('');
+            setSendSuccess(true);
+            setTimeout(() => setSendSuccess(false), 4000);
+        } else {
+            setSendError(res?.error || 'Failed to send email.');
+        }
+        setIsSendingEmail(false);
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -126,18 +234,20 @@ export default function InvoiceDetailsReport() {
                          </button>
                          {showActions && (
                              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 z-[70] animate-in fade-in slide-in-from-top-1 duration-200">
-                                 <button className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Export for Excel</button>
+                                 <button onClick={handleExportExcel} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Export for Excel</button>
                                  <button onClick={handlePrint} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Printer size={16} className="text-gray-400" /> Print</button>
                              </div>
                          )}
                     </div>
-                    <button className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all">Send...</button>
+                    <button onClick={() => { setShowSendModal(true); setSendToEmail(''); setSendError(null); }} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md transition-all flex items-center gap-2">
+                        <Send size={18} /> Send...
+                    </button>
                 </div>
             </div>
 
             <div className="flex flex-1 overflow-hidden relative">
                 <div className="flex-1 overflow-y-auto custom-scroll p-12 bg-[#f5f7f9] print:bg-white print:p-0">
-                    <div className="max-w-[900px] mx-auto bg-white rounded-sm border border-gray-200 shadow-sm p-16 print:border-none print:shadow-none min-h-[1000px]">
+                    <div ref={reportContentRef} className="max-w-[900px] mx-auto bg-white rounded-sm border border-gray-200 shadow-sm p-16 print:border-none print:shadow-none min-h-[1000px]">
                         
                         <div className="mb-12 border-b-4 border-[#0075dd] pb-8">
                             <h2 className="text-4xl font-black text-[#0075dd] mb-4 tracking-tighter">Invoice Details</h2>
@@ -392,6 +502,41 @@ export default function InvoiceDetailsReport() {
                         className="fixed inset-0 bg-[#002a63]/20 backdrop-blur-[2px] z-[90] animate-in fade-in duration-300"
                         onClick={() => setIsFiltersOpen(false)}
                     />
+                )}
+
+                {/* Send Report Modal */}
+                {showSendModal && (
+                    <div className="fixed inset-0 z-[305] flex items-center justify-center bg-fb-navy/70 backdrop-blur-md p-4 animate-in fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-8">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-black text-fb-navy">Send Report</h2>
+                                    <button onClick={() => { setShowSendModal(false); setSendError(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={24} /></button>
+                                </div>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">To (email)</label>
+                                    <input type="email" value={sendToEmail} onChange={e => setSendToEmail(e.target.value)} placeholder="recipient@example.com" className="w-full border border-gray-200 rounded-xl px-4 py-3 font-medium focus:ring-2 ring-fb-blue outline-none" />
+                                </div>
+                                <div className="mb-6 flex items-center gap-3">
+                                    <input type="checkbox" id="report-attach-pdf" checked={attachPdf} onChange={e => setAttachPdf(e.target.checked)} className="rounded border-gray-300 text-fb-blue focus:ring-fb-blue" />
+                                    <label htmlFor="report-attach-pdf" className="text-sm font-medium text-gray-700">Attach PDF to email</label>
+                                </div>
+                                {sendError && <p className="text-red-600 text-sm font-medium mb-4">{sendError}</p>}
+                                <div className="flex justify-end gap-3">
+                                    <button onClick={() => { setShowSendModal(false); setSendError(null); }} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                    <button onClick={handleSendReport} disabled={isSendingEmail} className="px-6 py-2 bg-fb-green text-white font-black rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
+                                        {isSendingEmail ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} Send
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {sendSuccess && (
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] min-w-[280px] bg-fb-slate text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <span className="text-sm font-bold">Report sent successfully.</span>
+                    </div>
                 )}
             </div>
         </div>

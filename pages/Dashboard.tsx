@@ -105,7 +105,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mb-10">
-          <h2 className="text-xl font-bold text-[#2d3a4b] mb-8">Welcome! Here's how to get the most out of FreshBooks.</h2>
+          <h2 className="text-xl font-bold text-[#2d3a4b] mb-8">Welcome! Here's how to get the most out of BookFlow.</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
               <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden flex flex-col relative group">
@@ -120,7 +120,7 @@ export default function Dashboard() {
                   </div>
                   <div className="p-8 flex-1 flex flex-col items-center text-center">
                       <h3 className="font-bold text-[#2d3a4b] text-lg mb-3 leading-tight">A Faster Way to Pull in Your Expense Data</h3>
-                      <p className="text-[#556d82] text-sm leading-relaxed mb-10 max-w-xs">See all your business expenses at a glance by connecting FreshBooks with your bank to automatically track your transactions.</p>
+                      <p className="text-[#556d82] text-sm leading-relaxed mb-10 max-w-xs">See all your business expenses at a glance by connecting BookFlow with your bank to automatically track your transactions.</p>
                       <button onClick={() => navigate('/apps')} className="w-full max-w-[280px] py-2.5 border-2 border-[#002a63] text-[#002a63] rounded font-black text-sm hover:bg-[#002a63] hover:text-white transition-all">Connect Your Bank</button>
                   </div>
               </div>
@@ -137,7 +137,7 @@ export default function Dashboard() {
                   </div>
                   <div className="p-8 flex-1 flex flex-col items-center text-center">
                       <h3 className="font-bold text-[#2d3a4b] text-lg mb-3 leading-tight">Spread the word. Get $100!</h3>
-                      <p className="text-[#556d82] text-sm leading-relaxed mb-10 max-w-xs">Know business owners or freelancers who want better accounting tools? Refer them to FreshBooks, and you'll get a $100 credit on your account once they've been a paying subscriber for at least 60 days.</p>
+                      <p className="text-[#556d82] text-sm leading-relaxed mb-10 max-w-xs">Know business owners or freelancers who want better accounting tools? Refer them to BookFlow, and you'll get a $100 credit on your account once they've been a paying subscriber for at least 60 days.</p>
                       <button className="w-full max-w-[280px] py-2.5 border-2 border-[#002a63] text-[#002a63] rounded font-black text-sm hover:bg-[#002a63] hover:text-white transition-all">Share and Save</button>
                   </div>
               </div>

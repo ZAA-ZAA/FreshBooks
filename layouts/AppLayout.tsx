@@ -8,7 +8,7 @@ import { useAuth } from '../App';
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user, tenant } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
@@ -40,8 +40,8 @@ export default function AppLayout() {
             <div className="bg-[#002a63]/20 p-4 border-b border-white/5 cursor-pointer hover:bg-[#002a63]/30 transition-colors">
                 <div className="flex items-center justify-between">
                     <div>
-                        <div className="text-xs font-black uppercase tracking-widest text-white/95 leading-tight">Demo</div>
-                        <div className="text-[10px] font-bold text-white/60 uppercase tracking-tight">Owner</div>
+                        <div className="text-xs font-black uppercase tracking-widest text-white/95 leading-tight truncate max-w-[140px]">{tenant?.name || 'Demo'}</div>
+                        <div className="text-[10px] font-bold text-white/60 uppercase tracking-tight">{user?.role === 'owner' ? 'Owner' : (user?.role || 'Member')}</div>
                     </div>
                     <ChevronDown size={14} className="text-white/40" />
                 </div>
@@ -98,14 +98,16 @@ export default function AppLayout() {
                     <Bell size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
                     <HelpCircle size={18} className="text-gray-400 cursor-pointer hover:text-[#002a63]" />
                     <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsProfileOpen(!isProfileOpen)}>
-                        <div className="w-8 h-8 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center font-bold text-[#0075dd] text-[11px]">JD</div>
+                        <div className="w-8 h-8 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center font-bold text-[#0075dd] text-[11px]">
+                            {user?.first_name && user?.last_name ? `${user.first_name[0]}${user.last_name[0]}`.toUpperCase() : (user?.email?.[0] || 'U').toUpperCase()}
+                        </div>
                     </div>
 
                     {isProfileOpen && (
                         <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-1 duration-150">
                              <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                                <p className="text-xs font-bold text-[#002a63]">John Doe</p>
-                                <p className="text-[10px] text-gray-400">john.doe@demo.com</p>
+                                <p className="text-xs font-bold text-[#002a63] truncate">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : (user?.email || 'User')}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{user?.email || '—'}</p>
                              </div>
                              <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsProfileOpen(false); navigate('/settings'); }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm cursor-pointer flex items-center gap-2 text-[#002a63] font-bold border-0 bg-transparent">
                                 <User size={14} className="text-gray-400" /> My Profile

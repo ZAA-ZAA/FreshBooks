@@ -118,9 +118,18 @@ export const authApi = {
         return response;
     },
 
+    async sendOtp(email: string) {
+        return post<{ sent?: boolean }>('/auth/send-otp', { email: email.trim() });
+    },
+
+    async verifyOtp(email: string, otp: string) {
+        return post<{ verified?: boolean }>('/auth/verify-otp', { email: email.trim(), otp: otp.trim() });
+    },
+
     async register(data: {
         email: string;
         password: string;
+        otp: string;
         company_name?: string;
         first_name?: string;
         last_name?: string;
@@ -244,6 +253,10 @@ export const invoicesApi = {
     async delete(id: string): Promise<ApiResponse<void>> {
         return del<void>(`/invoices/${id}`);
     },
+
+    async sendEmail(invoiceId: string, to: string, options?: { attachPdf?: boolean; pdfBase64?: string }): Promise<ApiResponse<{ sent?: boolean }>> {
+        return post<{ sent?: boolean }>(`/invoices/${invoiceId}/send-email`, { to: to.trim(), attach_pdf: options?.attachPdf, pdf_base64: options?.pdfBase64 });
+    },
 };
 
 // ==================== ESTIMATE API ====================
@@ -293,6 +306,10 @@ export const estimatesApi = {
 
     async convertToInvoice(id: string): Promise<ApiResponse<InvoiceData>> {
         return post<InvoiceData>(`/estimates/${id}/convert`, {});
+    },
+
+    async sendEmail(estimateId: string, to: string, options?: { attachPdf?: boolean; pdfBase64?: string }): Promise<ApiResponse<{ sent?: boolean }>> {
+        return post<{ sent?: boolean }>(`/estimates/${estimateId}/send-email`, { to: to.trim(), attach_pdf: options?.attachPdf, pdf_base64: options?.pdfBase64 });
     },
 };
 
@@ -518,6 +535,19 @@ export const recurringTemplatesApi = {
     },
 };
 
+// ==================== REPORTS API ====================
+
+export const reportsApi = {
+    async sendEmail(to: string, options?: { attachPdf?: boolean; pdfBase64?: string; pdfFilename?: string }): Promise<ApiResponse<{ sent?: boolean }>> {
+        return post<{ sent?: boolean }>('/reports/send-email', {
+            to: to.trim(),
+            attach_pdf: options?.attachPdf,
+            pdf_base64: options?.pdfBase64,
+            pdf_filename: options?.pdfFilename || 'invoice-details-report.pdf',
+        });
+    },
+};
+
 // ==================== DASHBOARD API ====================
 
 export interface DashboardStats {
@@ -547,6 +577,7 @@ export default {
     estimates: estimatesApi,
     expenses: expensesApi,
     payments: paymentsApi,
+    reports: reportsApi,
     items: itemsApi,
     vendors: vendorsApi,
     team: teamApi,

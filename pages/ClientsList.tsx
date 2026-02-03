@@ -25,10 +25,17 @@ export default function ClientsList() {
     const [isLoading, setIsLoading] = useState(true);
     const moreActionsRef = useRef(null);
 
+    const TOAST_DURATION_MS = 4000;
+
     const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
     };
+
+    useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [toast]);
 
     const refreshData = async () => {
         setIsLoading(true);

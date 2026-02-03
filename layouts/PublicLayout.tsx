@@ -17,7 +17,7 @@ const Navbar = () => {
              <div className="bg-fb-blue p-1.5 rounded-md shadow-sm">
                 <div className="w-5 h-5 flex items-center justify-center text-white font-black text-xl leading-none">f</div>
              </div>
-             <span className="text-2xl font-black text-fb-blue tracking-tight font-display">FreshBooks</span>
+             <span className="text-2xl font-black text-fb-blue tracking-tight font-display">BookFlow</span>
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6">
@@ -107,7 +107,7 @@ const Footer = () => {
                          <div className="bg-fb-blue p-1.5 rounded-md">
                             <div className="w-5 h-5 flex items-center justify-center text-white font-black text-xl leading-none">f</div>
                          </div>
-                         <span className="text-2xl font-black text-fb-navy tracking-tight font-display">FreshBooks</span>
+                         <span className="text-2xl font-black text-fb-navy tracking-tight font-display">BookFlow</span>
                     </div>
                     <div className="relative">
                         <button className="flex items-center gap-2 px-4 py-2 border rounded-md text-sm font-bold text-gray-500 min-w-[180px] justify-between hover:bg-gray-50">
@@ -139,7 +139,7 @@ const Footer = () => {
 
                 <div className="pt-12 border-t border-gray-100 flex flex-col lg:flex-row justify-between items-center gap-8">
                     <div className="flex flex-col lg:flex-row items-center gap-8 text-xs font-bold text-gray-400">
-                        <p>© 2024 FreshBooks</p>
+                        <p>© 2026 BookFlow</p>
                         <p className="flex items-center gap-1"><HelpCircle size={14} /> Call Toll Free: 1-888-674-3175</p>
                     </div>
                     <div className="flex items-center gap-8">

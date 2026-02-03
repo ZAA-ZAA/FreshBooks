@@ -1,5 +1,5 @@
 {
-  "name": "freshbooks-clone",
+  "name": "bookflow-app",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,12 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "html2canvas": "^1.4.1",
+    "immer": "10.1.1",
+    "jspdf": "^4.0.0",
+    "lucide-react": "^0.563.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "recharts": "2.15.0",
-    "immer": "10.1.1",
-    "lucide-react": "^0.563.0",
-    "react-router-dom": "^7.13.0"
+    "react-router-dom": "^7.13.0",
+    "recharts": "2.15.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

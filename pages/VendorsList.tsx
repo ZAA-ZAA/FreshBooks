@@ -19,9 +19,17 @@ export default function VendorsList() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const TOAST_DURATION_MS = 4000;
+
     useEffect(() => {
         loadVendors();
     }, []);
+
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [showToast]);
 
     const loadVendors = async () => {
         setIsLoading(true);
@@ -58,7 +66,6 @@ export default function VendorsList() {
             setIsModalOpen(false);
             setEditingVendor(null);
             setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
             setNewVendor({ company: '', email: '', phone: '' });
         } else {
             setError(response.error || 'Failed to save vendor');

@@ -13,9 +13,17 @@ export default function TeamList() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const TOAST_DURATION_MS = 4000;
+
     useEffect(() => {
         loadTeam();
     }, []);
+
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [showToast]);
 
     const loadTeam = async () => {
         setIsLoading(true);
@@ -51,7 +59,6 @@ export default function TeamList() {
             await loadTeam();
             setIsInviteModalOpen(false);
             setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
             setInviteData({ firstName: '', lastName: '', email: '', role: 'Employee' });
         } else {
             setError(response.error || 'Failed to add team member');

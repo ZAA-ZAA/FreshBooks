@@ -1,9 +1,17 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 import hashlib
 import uuid
+import random
+import smtplib
+import threading
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+import base64
 
 from config import Config
 from models import (
@@ -49,6 +57,72 @@ def success_response(data=None, message=None, status_code=200):
         response['message'] = message
     return jsonify(response), status_code
 
+# In-memory OTP store: email -> { 'otp': str, 'expires': datetime }
+_otp_store = {}
+OTP_EXPIRY_MINUTES = 10
+
+def _send_otp_email(to_email, otp_code):
+    """Send OTP via SMTP (Gmail)."""
+    smtp_email = getattr(Config, 'SMTP_EMAIL', None) or ''
+    smtp_password = getattr(Config, 'SMTP_PASSWORD', None) or ''
+    if not smtp_email or not smtp_password:
+        return False
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_email
+        msg['To'] = to_email
+        msg['Subject'] = 'Your BookFlow verification code'
+        body = f'''Hello,\n\nYour verification code is: {otp_code}\n\nThis code expires in {OTP_EXPIRY_MINUTES} minutes. If you did not request this, please ignore this email.\n\n— BookFlow'''
+        msg.attach(MIMEText(body, 'plain'))
+        with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, to_email, msg.as_string())
+        return True
+    except Exception:
+        return False
+
+def _verify_otp(email, otp):
+    """Check if OTP matches and is not expired. Returns True if valid."""
+    email = (email or '').strip().lower()
+    entry = _otp_store.get(email)
+    if not entry:
+        return False
+    if datetime.utcnow() > entry['expires']:
+        del _otp_store[email]
+        return False
+    return entry['otp'] == str(otp).strip()
+
+def _send_email(to_email, subject, html_body, pdf_base64=None, pdf_filename='document.pdf'):
+    """Send email via SMTP (e.g. invoice/estimate). Optionally attach PDF."""
+    smtp_email = getattr(Config, 'SMTP_EMAIL', None) or ''
+    smtp_password = getattr(Config, 'SMTP_PASSWORD', None) or ''
+    if not smtp_email or not smtp_password:
+        return False
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = smtp_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_body, 'html'))
+        if pdf_base64:
+            try:
+                payload = base64.b64decode(pdf_base64)
+                attachment = MIMEBase('application', 'pdf')
+                attachment.set_payload(payload)
+                encoders.encode_base64(attachment)
+                attachment.add_header('Content-Disposition', 'attachment', filename=pdf_filename)
+                msg.attach(attachment)
+            except Exception:
+                pass
+        with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, to_email, msg.as_string())
+        return True
+    except Exception:
+        return False
+
 # ==================== AUTH ROUTES ====================
 
 @app.route('/api/auth/check-email', methods=['GET'])
@@ -61,32 +135,74 @@ def check_email():
     return success_response({'available': not exists, 'exists': exists})
 
 
+@app.route('/api/auth/send-otp', methods=['POST'])
+def send_otp():
+    """Send 6-digit OTP to email for signup verification."""
+    data = request.json
+    email = (data.get('email') or '').strip()
+    if not email:
+        return error_response('Email is required')
+    if User.query.filter_by(email=email).first():
+        return error_response('Email already registered')
+    otp_code = ''.join(random.choices('0123456789', k=6))
+    _otp_store[email.lower()] = {
+        'otp': otp_code,
+        'expires': datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    }
+    if not _send_otp_email(email, otp_code):
+        return error_response('Failed to send verification email. Check SMTP settings.')
+    return success_response({'sent': True}, 'Verification code sent to your email')
+
+
+@app.route('/api/auth/verify-otp', methods=['POST'])
+def verify_otp():
+    """Verify OTP so frontend can proceed to next step. Does not consume OTP (verified again at register)."""
+    data = request.json
+    email = (data.get('email') or '').strip()
+    otp = (data.get('otp') or '').strip()
+    if not email or not otp:
+        return error_response('Email and OTP are required')
+    if not _verify_otp(email, otp):
+        return error_response('Invalid or expired verification code')
+    return success_response({'verified': True})
+
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
-    """Register a new user and tenant"""
+    """Register a new user and tenant. Requires valid OTP from send-otp."""
     data = request.json
     
     if not data.get('email') or not data.get('password'):
         return error_response('Email and password are required')
     
+    email = data['email'].strip()
+    otp = (data.get('otp') or '').strip()
+    if not otp:
+        return error_response('Verification code is required')
+    
+    if not _verify_otp(email, otp):
+        return error_response('Invalid or expired verification code')
+    
+    # Consume OTP
+    _otp_store.pop(email.lower(), None)
+    
     # Check if email exists
-    if User.query.filter_by(email=data['email']).first():
+    if User.query.filter_by(email=email).first():
         return error_response('Email already registered')
     
     # Create tenant
     tenant = Tenant(
-        name=data.get('company_name', data['email'].split('@')[0]),
-        email=data['email'],
+        name=data.get('company_name', email.split('@')[0]),
+        email=email,
         phone=data.get('phone', '')
     )
     db.session.add(tenant)
-    db.session.flush()  # Get tenant ID
+    db.session.flush()
     
-    # Create user
     password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
     user = User(
         tenant_id=tenant.id,
-        email=data['email'],
+        email=email,
         password_hash=password_hash,
         first_name=data.get('first_name', ''),
         last_name=data.get('last_name', ''),
@@ -448,6 +564,42 @@ def delete_invoice(invoice_id):
     
     return success_response(message='Invoice deleted successfully')
 
+@app.route('/api/invoices/<invoice_id>/send-email', methods=['POST'])
+def send_invoice_email(invoice_id):
+    """Send invoice by email to recipient."""
+    tenant_id = get_tenant_id()
+    if not tenant_id:
+        return error_response('Tenant ID required', 401)
+    invoice = Invoice.query.filter_by(id=invoice_id, tenant_id=tenant_id).first()
+    if not invoice:
+        return error_response('Invoice not found', 404)
+    data = request.json
+    to_email = (data.get('to') or '').strip()
+    if not to_email:
+        return error_response('Recipient email (to) is required')
+    pdf_base64 = data.get('pdf_base64') or ''
+    pdf_filename = f'invoice-{invoice.number}.pdf'
+    client = Client.query.get(invoice.client_id)
+    client_name = client.company if client else 'Unknown'
+    subject = f'Invoice #{invoice.number} from BookFlow'
+    html = f'''<h2>Invoice #{invoice.number}</h2>
+    <p>Hello,</p>
+    <p>Please find your invoice below.</p>
+    <p><strong>Client:</strong> {client_name}</p>
+    <p><strong>Date issued:</strong> {invoice.date_issued.isoformat() if invoice.date_issued else ''}</p>
+    <p><strong>Due date:</strong> {invoice.date_due.isoformat() if invoice.date_due else ''}</p>
+    <p><strong>Total:</strong> {invoice.total} PHP</p>
+    <p>If you have any questions, reply to this email.</p>
+    <p>— BookFlow</p>'''
+    if pdf_base64:
+        def _do_send():
+            _send_email(to_email, subject, html, pdf_base64=pdf_base64, pdf_filename=pdf_filename)
+        threading.Thread(target=_do_send, daemon=True).start()
+        return success_response({'sent': True}, 'Email sent successfully')
+    if not _send_email(to_email, subject, html):
+        return error_response('Failed to send email. Check SMTP settings.')
+    return success_response({'sent': True}, 'Email sent successfully')
+
 # ==================== ESTIMATE ROUTES ====================
 
 @app.route('/api/estimates', methods=['GET'])
@@ -631,6 +783,41 @@ def delete_estimate(estimate_id):
     db.session.commit()
     
     return success_response(message='Estimate deleted successfully')
+
+@app.route('/api/estimates/<estimate_id>/send-email', methods=['POST'])
+def send_estimate_email(estimate_id):
+    """Send estimate by email to recipient."""
+    tenant_id = get_tenant_id()
+    if not tenant_id:
+        return error_response('Tenant ID required', 401)
+    estimate = Estimate.query.filter_by(id=estimate_id, tenant_id=tenant_id).first()
+    if not estimate:
+        return error_response('Estimate not found', 404)
+    data = request.json
+    to_email = (data.get('to') or '').strip()
+    if not to_email:
+        return error_response('Recipient email (to) is required')
+    pdf_base64 = data.get('pdf_base64') or ''
+    pdf_filename = f'estimate-{estimate.number}.pdf'
+    client = Client.query.get(estimate.client_id)
+    client_name = client.company if client else 'Unknown'
+    subject = f'Estimate #{estimate.number} from BookFlow'
+    html = f'''<h2>Estimate #{estimate.number}</h2>
+    <p>Hello,</p>
+    <p>Please find your estimate below.</p>
+    <p><strong>Client:</strong> {client_name}</p>
+    <p><strong>Date issued:</strong> {estimate.date_issued.isoformat() if estimate.date_issued else ''}</p>
+    <p><strong>Total:</strong> {estimate.total} PHP</p>
+    <p>If you have any questions, reply to this email.</p>
+    <p>— BookFlow</p>'''
+    if pdf_base64:
+        def _do_send():
+            _send_email(to_email, subject, html, pdf_base64=pdf_base64, pdf_filename=pdf_filename)
+        threading.Thread(target=_do_send, daemon=True).start()
+        return success_response({'sent': True}, 'Email sent successfully')
+    if not _send_email(to_email, subject, html):
+        return error_response('Failed to send email. Check SMTP settings.')
+    return success_response({'sent': True}, 'Email sent successfully')
 
 @app.route('/api/estimates/<estimate_id>/convert', methods=['POST'])
 def convert_estimate_to_invoice(estimate_id):
@@ -1275,6 +1462,33 @@ def delete_recurring_template(template_id):
 
 # ==================== DASHBOARD / STATS ROUTES ====================
 
+@app.route('/api/reports/send-email', methods=['POST'])
+def send_report_email():
+    """Send a report by email. Optional PDF attachment. No login message (customer-facing)."""
+    tenant_id = get_tenant_id()
+    if not tenant_id:
+        return error_response('Tenant ID required', 401)
+    data = request.json
+    to_email = (data.get('to') or '').strip()
+    if not to_email:
+        return error_response('Recipient email (to) is required')
+    report_type = data.get('report_type') or 'invoice-details'
+    pdf_base64 = data.get('pdf_base64') or ''
+    pdf_filename = data.get('pdf_filename') or 'invoice-details-report.pdf'
+    subject = f'Invoice Details Report – BookFlow'
+    html = '''<h2>Invoice Details Report</h2>
+    <p>Please find your report attached or in this email.</p>
+    <p>If you have any questions, reply to this email.</p>
+    <p>— BookFlow</p>'''
+    if pdf_base64:
+        def _do_send():
+            _send_email(to_email, subject, html, pdf_base64=pdf_base64, pdf_filename=pdf_filename)
+        threading.Thread(target=_do_send, daemon=True).start()
+        return success_response({'sent': True}, 'Email sent successfully')
+    if not _send_email(to_email, subject, html):
+        return error_response('Failed to send email. Check SMTP settings.')
+    return success_response({'sent': True}, 'Email sent successfully')
+
 @app.route('/api/dashboard/stats', methods=['GET'])
 def get_dashboard_stats():
     """Get dashboard statistics"""
@@ -1313,7 +1527,7 @@ def init_database():
             # Create default tenant
             tenant = Tenant(
                 name='Default Organization',
-                email='admin@freshbooks.local',
+                email='admin@bookflow.local',
                 phone='',
                 country='Philippines',
                 currency='PHP'
@@ -1325,7 +1539,7 @@ def init_database():
             password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
             user = User(
                 tenant_id=tenant.id,
-                email='admin@freshbooks.local',
+                email='admin@bookflow.local',
                 password_hash=password_hash,
                 first_name='Admin',
                 last_name='User',
@@ -1337,7 +1551,7 @@ def init_database():
             return success_response({
                 'tenant': tenant.to_dict(),
                 'user': user.to_dict(),
-                'message': 'Database initialized with default tenant. Default login: admin@freshbooks.local / admin123'
+                'message': 'Database initialized with default tenant. Default login: admin@bookflow.local / admin123'
             }, 'Database initialized successfully', 201)
         
         return success_response({

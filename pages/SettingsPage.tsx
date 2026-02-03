@@ -18,12 +18,20 @@ export default function SettingsPage() {
     currency: 'PHP — Philippine Peso'
   });
 
+  const TOAST_DURATION_MS = 4000;
+
   useEffect(() => {
     const stored = localStorage.getItem('fb_user_profile');
     if (stored) {
       setFormData(prev => ({ ...prev, ...JSON.parse(stored) }));
     }
   }, []);
+
+  useEffect(() => {
+    if (!showToast) return;
+    const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [showToast]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +40,6 @@ export default function SettingsPage() {
       localStorage.setItem('fb_user_profile', JSON.stringify(formData));
       setLoading(false);
       setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
     }, 800);
   };
 

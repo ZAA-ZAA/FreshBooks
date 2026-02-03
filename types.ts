@@ -48,9 +48,9 @@ export interface InvoiceData {
 
 export enum AuthStep {
   SIGNUP_START = 0,
-  SURVEY_PROFILE = 1,
-  SURVEY_BUSINESS = 2,
-  COMPLETED = 3,
-  LOGIN_START = 4,
-  OTP = 5
+  OTP = 1,
+  SURVEY_PROFILE = 2,
+  SURVEY_BUSINESS = 3,
+  COMPLETED = 4,
+  LOGIN_START = 5
 }

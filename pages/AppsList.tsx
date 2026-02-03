@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plug, Search, ExternalLink, CheckCircle2, ChevronRight, Filter, Zap, LayoutGrid, List } from 'lucide-react';
 
 const AppCard = ({ name, category, color, description, onConnect }: { name: string, category: string, color: string, description: string, onConnect: (name: string) => void }) => (
@@ -31,22 +31,29 @@ const AppCard = ({ name, category, color, description, onConnect }: { name: stri
     </div>
 );
 
+const TOAST_DURATION_MS = 4000;
+
 export default function AppsList() {
     const [showToast, setShowToast] = useState(false);
     const [connectedApp, setConnectedApp] = useState('');
     const [activeCategory, setActiveCategory] = useState('All Apps');
 
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [showToast]);
+
     const handleConnect = (name: string) => {
         setConnectedApp(name);
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
     };
 
     const categories = ['All Apps', 'Payments', 'Payroll', 'Communication', 'CRM', 'E-Commerce', 'Automation'];
     
     const apps = [
         { name: 'Stripe', category: 'Payments', color: 'bg-indigo-600', desc: 'Securely accept credit cards and ACH payments directly on your invoices.' },
-        { name: 'Gusto', category: 'Payroll', color: 'bg-orange-500', desc: 'Sync your payroll data and pay your team without ever leaving FreshBooks.' },
+        { name: 'Gusto', category: 'Payroll', color: 'bg-orange-500', desc: 'Sync your payroll data and pay your team without ever leaving BookFlow.' },
         { name: 'Slack', category: 'Communication', color: 'bg-purple-600', desc: 'Get instant notifications for invoice updates and project milestones in your workspace.' },
         { name: 'Shopify', category: 'E-Commerce', color: 'bg-emerald-500', desc: 'Automatically import orders and sync inventory for seamless bookkeeping.' },
         { name: 'HubSpot', category: 'CRM', color: 'bg-orange-600', desc: 'Maintain unified client data across marketing and accounting workflows.' },

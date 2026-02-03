@@ -1,10 +1,11 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthStep } from '../types';
 import { Loader2, Check, ChevronDown, HelpCircle, LogOut, ArrowLeft, ShieldCheck, Globe, AlertCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../App';
 import { authApi } from '../api';
+import { getEmailError, getPasswordError, isRequired } from '../utils/validation';
 
 interface SignupProps {
   authStep: AuthStep;
@@ -49,9 +50,12 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const ERROR_TOAST_DURATION_MS = 6000;
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    otp: '',
     agreedToTerms: false,
     firstName: '',
     lastName: '',
@@ -68,34 +72,81 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
     customization: '' 
   });
 
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), ERROR_TOAST_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [error]);
+
   const handleNext = async () => {
     setError(null);
     if (authStep === AuthStep.SIGNUP_START) {
-      if (!formData.email?.trim() || !formData.password?.trim()) {
-        setError('Please enter your email and password.');
-        return;
-      }
+      const emailErr = getEmailError(formData.email);
+      if (emailErr) { setError(emailErr); return; }
+      const pwErr = getPasswordError(formData.password, 6);
+      if (pwErr) { setError(pwErr); return; }
       if (!formData.agreedToTerms) {
         setError('Please agree to the Terms of Service and Privacy Policy.');
         return;
       }
       setLoading(true);
       const checkRes = await authApi.checkEmail(formData.email.trim());
-      setLoading(false);
       if (!checkRes.success) {
+        setLoading(false);
         setError(checkRes.error || 'Could not verify email. Please try again.');
         return;
       }
       if (checkRes.data && (checkRes.data as { available?: boolean }).available === false) {
+        setLoading(false);
         setError('This email is already registered. Please log in or use a different email.');
         return;
       }
+      const sendRes = await authApi.sendOtp(formData.email.trim());
+      setLoading(false);
+      if (!sendRes.success) {
+        setError(sendRes.error || 'Failed to send verification code. Please try again.');
+        return;
+      }
+      setAuthStep(AuthStep.OTP);
+      return;
+    }
+    if (authStep === AuthStep.OTP) {
+      const otp = (formData.otp || '').trim();
+      if (!otp || otp.length !== 6) {
+        setError('Please enter the 6-digit code from your email.');
+        return;
+      }
+      setLoading(true);
+      const verifyRes = await authApi.verifyOtp(formData.email.trim(), otp);
+      setLoading(false);
+      if (!verifyRes.success) {
+        setError(verifyRes.error || 'Invalid or expired code. Please try again or request a new code.');
+        return;
+      }
+      setError(null);
+      setAuthStep(AuthStep.SURVEY_PROFILE);
+      return;
+    }
+    if (authStep === AuthStep.SURVEY_PROFILE) {
+      if (!isRequired(formData.firstName)) { setError('First name is required.'); return; }
+      if (!isRequired(formData.lastName)) { setError('Last name is required.'); return; }
+      if (!isRequired(formData.location)) { setError('Location is required.'); return; }
+      if (!isRequired(formData.phone)) { setError('Phone number is required.'); return; }
+      setError(null);
+      setAuthStep(AuthStep.SURVEY_BUSINESS);
+      return;
     }
     if (authStep === AuthStep.SURVEY_BUSINESS) {
+      const otp = (formData.otp || '').trim();
+      if (!otp) {
+        setError('Verification code is required. Please go back and verify your email.');
+        return;
+      }
       setLoading(true);
       const result = await registerUser({
         email: formData.email.trim(),
         password: formData.password,
+        otp,
         company_name: formData.companyName || formData.email.split('@')[0],
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -111,22 +162,20 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setError(null);
-      setAuthStep(authStep + 1);
-    }, 600);
+    setTimeout(() => { setLoading(false); setError(null); setAuthStep(authStep + 1); }, 600);
   };
 
   const handleBack = () => {
       if (authStep === AuthStep.SIGNUP_START) {
           navigate('/');
+      } else if (authStep === AuthStep.OTP) {
+          setAuthStep(AuthStep.SIGNUP_START);
       } else {
           setAuthStep(authStep - 1);
       }
   };
 
-  // Step 0: Try FreshBooks Free (Initial Screen)
+  // Step 0: Try BookFlow Free (Initial Screen)
   if (authStep === AuthStep.SIGNUP_START) {
     return (
       <div className="min-h-screen bg-[#002a63] flex flex-col items-center justify-center relative overflow-hidden font-sans px-4">
@@ -152,9 +201,9 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
                <div className="bg-[#0075dd] p-2 rounded-lg">
                   <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
                </div>
-               <span className="text-3xl font-black text-[#002a63] tracking-tight">FreshBooks</span>
+               <span className="text-3xl font-black text-[#002a63] tracking-tight">BookFlow</span>
             </div>
-            <h1 className="text-2xl font-bold text-[#002a63] mb-2">Try FreshBooks Free</h1>
+            <h1 className="text-2xl font-bold text-[#002a63] mb-2">Try BookFlow Free</h1>
             <p className="text-gray-500 text-sm font-medium">No credit card required. Cancel anytime.</p>
           </div>
 
@@ -208,7 +257,10 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
                 onChange={e => setFormData({...formData, agreedToTerms: e.target.checked})}
               />
               <label htmlFor="terms" className="text-[11px] text-gray-500 leading-normal">
-                I confirm that I have read and agree to FreshBooks <a href="#" className="text-fb-blue hover:underline">Terms of Service</a> and <a href="#" className="text-fb-blue hover:underline">Privacy Policy</a>.
+                I confirm that I have read and agree to BookFlow{' '}
+                <button type="button" onClick={(e) => e.preventDefault()} className="text-fb-blue hover:underline bg-transparent border-0 p-0 cursor-pointer font-inherit">Terms of Service</button>
+                {' '}and{' '}
+                <button type="button" onClick={(e) => e.preventDefault()} className="text-fb-blue hover:underline bg-transparent border-0 p-0 cursor-pointer font-inherit">Privacy Policy</button>.
               </label>
             </div>
 
@@ -259,7 +311,61 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
     );
   }
 
-  // Steps 1 & 2: Survey Onboarding (Split-Screen Design)
+  // OTP verification step
+  if (authStep === AuthStep.OTP) {
+    return (
+      <div className="min-h-screen bg-[#002a63] flex flex-col items-center justify-center relative overflow-hidden font-sans px-4">
+        <button
+          onClick={handleBack}
+          className="absolute top-8 left-8 flex items-center gap-2 text-white/60 hover:text-white transition-colors group z-50"
+        >
+          <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center group-hover:bg-white/10 transition-all">
+            <ArrowLeft size={16} />
+          </div>
+          <span className="text-xs font-bold uppercase tracking-widest">Back</span>
+        </button>
+        <div className="absolute top-0 right-0 w-[1000px] h-[1000px] bg-blue-600/20 rounded-full blur-[150px] translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-blue-500/10 rounded-full blur-[120px] -translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
+        <div className="w-full max-w-[480px] bg-white rounded-xl shadow-2xl z-10 p-12 animate-in fade-in zoom-in-95 duration-500 text-center">
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <div className="bg-[#0075dd] p-2 rounded-lg">
+              <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
+            </div>
+            <span className="text-3xl font-black text-[#002a63] tracking-tight">BookFlow</span>
+          </div>
+          <h1 className="text-2xl font-bold text-[#002a63] mb-2">Check your email</h1>
+          <p className="text-gray-500 text-sm font-medium mb-6">
+            We sent a 6-digit code to <span className="font-bold text-[#2d3a4b]">{formData.email}</span>
+          </p>
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+          <div className="mb-6">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="000000"
+              className="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-[#0075dd] outline-none transition-all placeholder:text-gray-400 font-medium text-center text-2xl tracking-[0.5em]"
+              value={formData.otp}
+              onChange={e => setFormData({ ...formData, otp: e.target.value.replace(/\D/g, '') })}
+            />
+          </div>
+          <button
+            onClick={handleNext}
+            className="w-full bg-[#00a651] hover:bg-[#008541] text-white font-black py-4 rounded-lg shadow-lg transition-all active:scale-[0.98] text-lg"
+          >
+            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Verify & Continue'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Steps: Survey Onboarding (Split-Screen Design)
   return (
     <div className="min-h-screen bg-white flex font-sans overflow-hidden animate-in fade-in duration-500">
       {/* Back to Home Button - Floating fixed */}
@@ -280,7 +386,7 @@ export default function Signup({ authStep, setAuthStep, onComplete }: SignupProp
             <div className="bg-[#0075dd] p-2 rounded-lg shadow-sm">
               <div className="w-6 h-6 flex items-center justify-center text-white font-black text-xl leading-none">f</div>
             </div>
-            <span className="text-2xl font-black text-[#002a63] tracking-tight ml-3">FreshBooks</span>
+            <span className="text-2xl font-black text-[#002a63] tracking-tight ml-3">BookFlow</span>
           </div>
 
           {authStep === AuthStep.SURVEY_PROFILE && (

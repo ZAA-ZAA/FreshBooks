@@ -169,7 +169,7 @@ export default function App() {
             <div className="bg-[#0075dd] p-2 rounded-lg">
               <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
             </div>
-            <span className="text-3xl font-black text-[#002a63] tracking-tight">FreshBooks</span>
+            <span className="text-3xl font-black text-[#002a63] tracking-tight">BookFlow</span>
           </div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0075dd] mx-auto"></div>
           <p className="text-gray-500 mt-4">Loading...</p>
@@ -187,7 +187,7 @@ export default function App() {
             <div className="bg-[#0075dd] p-2 rounded-lg">
               <div className="w-6 h-6 flex items-center justify-center text-white font-black text-2xl leading-none">f</div>
             </div>
-            <span className="text-3xl font-black text-[#002a63] tracking-tight">FreshBooks</span>
+            <span className="text-3xl font-black text-[#002a63] tracking-tight">BookFlow</span>
           </div>
           
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">

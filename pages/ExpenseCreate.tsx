@@ -38,9 +38,17 @@ export default function ExpenseCreate() {
     const categoryRef = useRef(null);
     const clientRef = useRef(null);
 
+    const TOAST_DURATION_MS = 4000;
+
     useEffect(() => {
         loadInitialData();
     }, [id, isEdit]);
+
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [showToast]);
 
     const loadInitialData = async () => {
         setIsLoading(true);

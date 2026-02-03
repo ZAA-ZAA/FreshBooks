@@ -20,17 +20,10 @@ export const SIDEBAR_ITEMS = [
   { icon: <FileText size={20} />, label: 'Invoices', path: '/invoices', hasChevron: true },
   { icon: <CreditCard size={20} />, label: 'Payments', path: '/payments', hasChevron: true },
   { icon: <Receipt size={20} />, label: 'Expenses', path: '/expenses', hasChevron: true },
-  { icon: <Briefcase size={20} />, label: 'Projects', path: '/projects', hasChevron: false },
-  { icon: <Clock size={20} />, label: 'Time Tracking', path: '/time-tracking', hasChevron: false },
-  { icon: <BarChart3 size={20} />, label: 'Accounting', path: '/accounting', hasChevron: true },
   { icon: <BarChart3 size={20} />, label: 'Reports', path: '/reports', hasChevron: false },
 ];
 
 export const SIDEBAR_BOTTOM_ITEMS = [
-  { label: 'Apps', path: '/apps' },
-  { label: 'Team Members', path: '/team' },
-  { label: 'Items and Services', path: '/items' },
-  { label: 'Bank Connections', path: '/bank-connections' },
   { label: 'Settings', path: '/settings' },
 ];
 

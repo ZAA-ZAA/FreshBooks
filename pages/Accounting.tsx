@@ -164,7 +164,7 @@ export default function Accounting() {
                     <ReportCard title="Balance Sheet" desc="A complete record of transactions and balances for all your accounts. Updated with new style and functionality." icon={BookOpen} updated={true} />
                     <ReportCard title="Revenue by Client" desc="A breakdown of your revenue by client to help you understand your business better. Updated with new style and functionality." icon={TrendingUp} updated={true} />
                     <ReportCard title="Trial Balance" desc="A quick gut check to make sure your books are balanced" icon={Calculator} />
-                    <ReportCard title="Bank Reconciliation Summary" desc="Shows unreconciled bank transactions and FreshBooks entries" icon={Landmark} />
+                    <ReportCard title="Bank Reconciliation Summary" desc="Shows unreconciled bank transactions and BookFlow entries" icon={Landmark} />
                     <ReportCard title="Sales Tax Summary" desc="Helps determine how much you owe the government in Sales Taxes" icon={Calculator} />
                     <ReportCard title="Cash Flow" desc="Overview of Cash coming in and going out of your business" icon={RotateCcw} />
                     <ReportCard title="Journal Entry" desc="Helps you see all the Manual Journal Entries and Adjustments made to your books" icon={ScrollText} />
