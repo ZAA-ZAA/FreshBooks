@@ -142,6 +142,7 @@ The frontend is configured so that when you open the site via the tunnel (not lo
 
 - **“Unable to connect to backend”** — Make sure the backend is running (`python app.py` or Docker) and that `.env` (or Docker env) has the correct DB settings.
 - **“Database connection failed”** — Check that the `bookflow` database exists and the password matches your PostgreSQL user.
+- **Tenant logo not saving (existing DB)** — If you added the app after the tenant table existed, add the logo column: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_data TEXT;`
 - **“No module named 'flask'”** — Run `python -m pip install -r requirements.txt` from the `backend` folder.
 - **OTP or send-email not working** — Set `SMTP_EMAIL` and `SMTP_PASSWORD` in `backend/.env` (or in Docker env). For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833).
 

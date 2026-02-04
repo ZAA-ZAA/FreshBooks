@@ -258,6 +258,36 @@ def get_current_user():
         'tenant': tenant.to_dict()
     })
 
+# ==================== TENANT LOGO (sync across devices) ====================
+
+@app.route('/api/tenant/logo', methods=['GET'])
+def get_tenant_logo():
+    """Get current tenant logo (base64 data URL)."""
+    tenant_id = get_tenant_id()
+    if not tenant_id:
+        return error_response('Not authenticated', 401)
+    tenant = Tenant.query.get(tenant_id)
+    if not tenant:
+        return error_response('Tenant not found', 404)
+    return success_response({'logo': tenant.logo_data})
+
+@app.route('/api/tenant/logo', methods=['PUT'])
+def update_tenant_logo():
+    """Update current tenant logo. Body: { \"logo\": \"data:image/png;base64,...\" } or null to clear."""
+    tenant_id = get_tenant_id()
+    if not tenant_id:
+        return error_response('Not authenticated', 401)
+    tenant = Tenant.query.get(tenant_id)
+    if not tenant:
+        return error_response('Tenant not found', 404)
+    data = request.get_json() or {}
+    logo = data.get('logo')
+    if logo is not None and not isinstance(logo, str):
+        return error_response('logo must be a string or null', 400)
+    tenant.logo_data = logo if logo else None
+    db.session.commit()
+    return success_response({'logo': tenant.logo_data}, 'Logo updated')
+
 # ==================== CLIENT ROUTES ====================
 
 @app.route('/api/clients', methods=['GET'])

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, CheckCircle2, X, Info, Calendar as CalendarIcon, Search, AlertCircle, Loader2, Download, Send } from 'lucide-react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../App';
-import { clientsApi, invoicesApi, estimatesApi, getTenantId, ClientData, InvoiceData, InvoiceItemData } from '../api';
+import { clientsApi, invoicesApi, estimatesApi, getTenantId, tenantApi, ClientData, InvoiceData, InvoiceItemData } from '../api';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -139,8 +139,11 @@ export default function InvoiceCreate() {
     if (!logoCanvasRef.current) return;
     const dataUrl = logoCanvasRef.current.toDataURL('image/png');
     setLogoUrl(dataUrl);
-    const tid = getTenantId();
-    if (tid) try { localStorage.setItem('bookflow_tenant_logo_' + tid, dataUrl); } catch (_) {}
+    const res = await tenantApi.updateLogo(dataUrl);
+    if (res.success) {
+      const tid = getTenantId();
+      if (tid) try { localStorage.setItem('bookflow_tenant_logo_' + tid, dataUrl); } catch (_) {}
+    }
     setShowLogoCropModal(false);
     setCropSource(null);
   };
@@ -256,15 +259,31 @@ export default function InvoiceCreate() {
     }
   }, [tenant]);
 
+  // Load logo from DB (syncs across devices); fallback to localStorage for older data
   useEffect(() => {
-    const tid = getTenantId();
-    if (tid) {
-      try {
-        const saved = localStorage.getItem('bookflow_tenant_logo_' + tid);
-        if (saved) setLogoUrl(saved);
-      } catch (_) {}
-    }
-  }, [tenant?.id]);
+    let cancelled = false;
+    const loadLogo = async () => {
+      if (tenant?.logo) {
+        setLogoUrl(tenant.logo);
+        return;
+      }
+      const res = await tenantApi.getLogo();
+      if (cancelled) return;
+      if (res.success && res.data?.logo) {
+        setLogoUrl(res.data.logo);
+        return;
+      }
+      const tid = getTenantId();
+      if (tid) {
+        try {
+          const saved = localStorage.getItem('bookflow_tenant_logo_' + tid);
+          if (saved) setLogoUrl(saved);
+        } catch (_) {}
+      }
+    };
+    loadLogo();
+    return () => { cancelled = true; };
+  }, [tenant?.id, tenant?.logo]);
 
   useEffect(() => {
     loadInitialData();

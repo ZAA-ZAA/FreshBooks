@@ -23,6 +23,7 @@ class Tenant(db.Model):
     address = db.Column(db.Text)
     country = db.Column(db.String(100), default='Philippines')
     currency = db.Column(db.String(10), default='PHP')
+    logo_data = db.Column(db.Text)  # base64 data URL for tenant logo (syncs across devices)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -48,6 +49,7 @@ class Tenant(db.Model):
             'address': self.address,
             'country': self.country,
             'currency': self.currency,
+            'logo': self.logo_data,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

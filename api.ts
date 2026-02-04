@@ -169,6 +169,17 @@ export const authApi = {
     },
 };
 
+// ==================== TENANT API (logo stored in DB, syncs across devices) ====================
+
+export const tenantApi = {
+    async getLogo(): Promise<ApiResponse<{ logo: string | null }>> {
+        return get<{ logo: string | null }>('/tenant/logo');
+    },
+    async updateLogo(logo: string | null): Promise<ApiResponse<{ logo: string | null }>> {
+        return put<{ logo: string | null }>('/tenant/logo', { logo });
+    },
+};
+
 // ==================== CLIENT API ====================
 
 export interface ClientData {
