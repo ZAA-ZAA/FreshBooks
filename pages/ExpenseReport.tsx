@@ -1,11 +1,15 @@
 // @ts-nocheck
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-    ChevronLeft, ChevronDown, Printer, Download, X, 
-    Filter, FileText, ChevronRight, Home, Briefcase, Receipt, Smile, Loader2
+    ChevronLeft, ChevronDown, Download, X, 
+    Filter, FileText, ChevronRight, Home, Briefcase, Receipt, Smile, Loader2, Send
 } from 'lucide-react';
-import { expensesApi, ExpenseData } from '../api';
+import { expensesApi, reportsApi, ExpenseData } from '../api';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { getEmailError } from '../utils/validation';
+import { addImageToPdfMultiPage } from '../utils/pdfHelpers';
 
 const CATEGORY_ICONS = {
     'Personal': <Smile size={16} className="text-emerald-500" />,
@@ -20,12 +24,25 @@ export default function ExpenseReport() {
     const [isFiltersOpen, setIsFiltersOpen] = useState(false);
     const [expenses, setExpenses] = useState<ExpenseData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [showActions, setShowActions] = useState(false);
+    const [showSendModal, setShowSendModal] = useState(false);
+    const [sendToEmail, setSendToEmail] = useState('');
+    const [attachPdf, setAttachPdf] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [sendError, setSendError] = useState<string | null>(null);
     
     const [dateRange, setDateRange] = useState('This Year');
     const [categoryFilter, setCategoryFilter] = useState('All Categories');
+    const reportContentRef = useRef(null);
+    const actionsRef = useRef(null);
 
     useEffect(() => {
         loadExpenses();
+        const handleClickOutside = (e) => {
+            if (actionsRef.current && !actionsRef.current.contains(e.target)) setShowActions(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const loadExpenses = async () => {
@@ -55,6 +72,78 @@ export default function ExpenseReport() {
         return { groups: Object.values(grouped), totalExpenses };
     }, [expenses, categoryFilter]);
 
+    const handleSavePdf = async () => {
+        setShowActions(false);
+        if (!reportContentRef.current) return;
+        try {
+            const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, logging: false });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            addImageToPdfMultiPage(pdf, imgData, canvas.width, canvas.height);
+            pdf.save(`expense-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+        } catch (_) {}
+    };
+
+    const handleExportExcel = () => {
+        setShowActions(false);
+        const headers = ['Category', 'Merchant', 'Date', 'Description', 'Amount (PHP)'];
+        const rows = [headers];
+        (reportData.groups as any[]).forEach(group => {
+            group.items.forEach((exp: any) => {
+                rows.push([
+                    group.name,
+                    exp.merchant || '',
+                    exp.date || '',
+                    exp.description || '',
+                    (exp.amount != null ? exp.amount : 0).toFixed(2)
+                ]);
+            });
+        });
+        // RFC 4180 CSV: comma delimiter, fields in quotes, " escaped as ""
+        const escapeCsv = (v) => {
+            const s = v == null ? '' : String(v);
+            const safe = s.replace(/\r?\n/g, ' ').replace(/\t/g, ' ');
+            return '"' + safe.replace(/"/g, '""') + '"';
+        };
+        const csv = rows.map(r => r.map(escapeCsv).join(',')).join('\r\n');
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `expense-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleSendReport = async () => {
+        const to = sendToEmail.trim();
+        if (!to) { setSendError('Enter recipient email.'); return; }
+        const err = getEmailError(to);
+        if (err) { setSendError(err); return; }
+        setIsSendingEmail(true);
+        setSendError(null);
+        let pdfBase64 = '';
+        if (attachPdf && reportContentRef.current) {
+            try {
+                const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, logging: false });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                addImageToPdfMultiPage(pdf, imgData, canvas.width, canvas.height);
+                const dataUrl = pdf.output('dataurlstring') || pdf.output('datauristring') || '';
+                pdfBase64 = (dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl) || '';
+            } catch (_) {}
+        }
+        const res = await reportsApi.sendEmail(to, { attachPdf: !!pdfBase64, pdfBase64, pdfFilename: 'expense-report.pdf' });
+        if (res?.success) {
+            setShowSendModal(false);
+            setSendToEmail('');
+        } else {
+            setSendError(res?.error || 'Failed to send email.');
+        }
+        setIsSendingEmail(false);
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -72,12 +161,27 @@ export default function ExpenseReport() {
                     </Link>
                     <h1 className="text-4xl font-black text-[#002a63] tracking-tighter">Expense Report</h1>
                 </div>
-                <button className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md">Send...</button>
+                <div className="flex items-center gap-3">
+                    <div className="relative" ref={actionsRef}>
+                        <button type="button" onClick={() => setShowActions(!showActions)} className="flex items-center gap-2 border border-gray-200 px-5 py-2.5 rounded-lg text-sm font-bold text-[#002a63] hover:bg-gray-50">
+                            More Actions <ChevronDown size={14} className={showActions ? 'rotate-180' : ''} />
+                        </button>
+                        {showActions && (
+                            <div className="absolute top-full right-0 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 z-[70]">
+                                <button type="button" onClick={handleSavePdf} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Save as PDF</button>
+                                <button type="button" onClick={handleExportExcel} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Export to Excel</button>
+                            </div>
+                        )}
+                    </div>
+                    <button type="button" onClick={() => { setShowSendModal(true); setSendToEmail(''); setSendError(null); }} className="bg-fb-green hover:bg-fb-darkGreen text-white px-8 py-2.5 rounded-lg font-black shadow-md flex items-center gap-2">
+                        <Send size={18} /> Send...
+                    </button>
+                </div>
             </div>
 
             <div className="flex flex-1 overflow-hidden relative">
                 <div className="flex-1 overflow-y-auto custom-scroll p-12 bg-[#f5f7f9] print:bg-white print:p-0">
-                    <div className="max-w-[900px] mx-auto bg-white rounded-sm border border-gray-200 shadow-sm p-16 print:border-none print:shadow-none min-h-[1000px]">
+                    <div ref={reportContentRef} className="max-w-[900px] mx-auto bg-white rounded-sm border border-gray-200 shadow-sm p-16 print:border-none print:shadow-none min-h-[1000px]">
                         <div className="mb-12 border-b-4 border-[#0075dd] pb-8">
                             <h2 className="text-4xl font-black text-[#0075dd] mb-4 tracking-tighter">Expense Report</h2>
                             <div className="space-y-1 text-xs text-gray-500 font-bold">
@@ -212,6 +316,34 @@ export default function ExpenseReport() {
                     </div>
                 </aside>
                 {isFiltersOpen && <div className="fixed inset-0 bg-[#002a63]/20 backdrop-blur-[2px] z-[90]" onClick={() => setIsFiltersOpen(false)} />}
+
+                {showSendModal && (
+                    <div className="fixed inset-0 z-[305] flex items-center justify-center bg-fb-navy/70 backdrop-blur-md p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-8">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-black text-fb-navy">Send Report</h2>
+                                    <button type="button" onClick={() => { setShowSendModal(false); setSendError(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={24} /></button>
+                                </div>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">To (email)</label>
+                                    <input type="email" value={sendToEmail} onChange={e => setSendToEmail(e.target.value)} placeholder="recipient@example.com" className="w-full border border-gray-200 rounded-xl px-4 py-3 font-medium focus:ring-2 ring-fb-blue outline-none" />
+                                </div>
+                                <div className="mb-6 flex items-center gap-3">
+                                    <input type="checkbox" id="exp-report-attach-pdf" checked={attachPdf} onChange={e => setAttachPdf(e.target.checked)} className="rounded border-gray-300 text-fb-blue focus:ring-fb-blue" />
+                                    <label htmlFor="exp-report-attach-pdf" className="text-sm font-medium text-gray-700">Attach PDF to email</label>
+                                </div>
+                                {sendError && <p className="text-red-600 text-sm font-medium mb-4">{sendError}</p>}
+                                <div className="flex justify-end gap-3">
+                                    <button type="button" onClick={() => { setShowSendModal(false); setSendError(null); }} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                    <button type="button" onClick={handleSendReport} disabled={isSendingEmail} className="px-6 py-2 bg-fb-green text-white font-black rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
+                                        {isSendingEmail ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} Send
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

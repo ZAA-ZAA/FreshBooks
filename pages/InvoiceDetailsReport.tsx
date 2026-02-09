@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-    ChevronLeft, ChevronDown, Printer, Download, Search, X, 
-    Calendar, Filter, FileText, MoreHorizontal, Send, ChevronRight, Loader2
+    ChevronLeft, ChevronDown, Download, X, 
+    Filter, FileText, Send, ChevronRight, Loader2
 } from 'lucide-react';
 import { invoicesApi, clientsApi, reportsApi, InvoiceData, ClientData } from '../api';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { getEmailError } from '../utils/validation';
+import { addImageToPdfMultiPage } from '../utils/pdfHelpers';
 
 export default function InvoiceDetailsReport() {
     const navigate = useNavigate();
@@ -104,19 +105,30 @@ export default function InvoiceDetailsReport() {
         };
     }, [invoices, clientFilter, statusFilter]);
 
-    const handlePrint = () => {
-        window.print();
+    const handleSavePdf = async () => {
         setShowActions(false);
+        if (!reportContentRef.current) return;
+        try {
+            const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, logging: false });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            addImageToPdfMultiPage(pdf, imgData, canvas.width, canvas.height);
+            pdf.save(`invoice-details-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+        } catch (_) {}
     };
 
     const handleExportExcel = () => {
         setShowActions(false);
-        const headers = ['Client Name', 'Invoice #', 'Date Issued', 'Date Due', 'Invoice Status', 'Date Paid', 'Item Name', 'Item Description', 'Rate', 'Quantity', 'Discount Percentage', 'Line Subtotal', 'Tax 1 Type', 'Tax 1 Amount', 'Tax 2 Type', 'Tax 2 Amount', 'Line Total', 'Currency'];
+        const headers = ['Client Name', 'Invoice #', 'Date Issued', 'Date Due', 'Invoice Status', 'Date Paid', 'Item Name', 'Item Description', 'Rate', 'Quantity', 'Discount %', 'Line Subtotal', 'Tax 1 Amount', 'Tax 2 Amount', 'Line Total', 'Currency'];
         let filtered = invoices;
         if (statusFilter !== 'All Statuses') filtered = filtered.filter(i => i.status === statusFilter);
         if (clientFilter !== 'All Clients') filtered = filtered.filter(i => i.client === clientFilter);
 
-        const rows = [headers];
+        const numCols = headers.length;
+        const emptyRow = () => Array(numCols).fill('');
+        const rows = [['Invoice Details Report', ...emptyRow().slice(1)]];
+        rows.push(emptyRow());
+        rows.push(headers);
         filtered.forEach(inv => {
             const clientName = inv.client || '';
             const invNum = inv.number || '';
@@ -127,7 +139,7 @@ export default function InvoiceDetailsReport() {
             const discountPct = (inv.discount != null ? inv.discount : 0);
             const items = inv.items || [];
             if (items.length === 0) {
-                rows.push([clientName, invNum, dateIssued, dateDue, status, datePaid, '', '', '', '', discountPct, '', '', 0, '', 0, inv.total != null ? inv.total : '', 'PHP']);
+                rows.push([clientName, invNum, dateIssued, dateDue, status, datePaid, '', '', '', '', discountPct, '', 0, 0, inv.total != null ? inv.total : '', 'PHP']);
             } else {
                 items.forEach((item, idx) => {
                     const rate = item.rate != null ? item.rate : 0;
@@ -148,9 +160,7 @@ export default function InvoiceDetailsReport() {
                         qty,
                         idx === 0 ? discountPct : 0,
                         lineSub,
-                        'hidden',
                         tax1Amt,
-                        '',
                         0,
                         lineSub + tax1Amt,
                         'PHP'
@@ -159,11 +169,13 @@ export default function InvoiceDetailsReport() {
             }
         });
 
-        const escape = (v) => {
+        // RFC 4180 CSV: comma delimiter, fields in quotes, " escaped as ""
+        const escapeCsv = (v) => {
             const s = v == null ? '' : String(v);
-            return s.replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
+            const safe = s.replace(/\r?\n/g, ' ').replace(/\t/g, ' ');
+            return '"' + safe.replace(/"/g, '""') + '"';
         };
-        const csv = rows.map(r => r.map(escape).join('\t')).join('\r\n');
+        const csv = rows.map(r => r.map(escapeCsv).join(',')).join('\r\n');
         const BOM = '\uFEFF';
         const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -188,9 +200,7 @@ export default function InvoiceDetailsReport() {
                 const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, logging: false });
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                const w = pdf.internal.pageSize.getWidth();
-                const h = (canvas.height * w) / canvas.width;
-                pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+                addImageToPdfMultiPage(pdf, imgData, canvas.width, canvas.height);
                 const dataUrl = pdf.output('dataurlstring') || pdf.output('datauristring') || '';
                 pdfBase64 = (dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl) || '';
             } catch (_) {}
@@ -233,9 +243,9 @@ export default function InvoiceDetailsReport() {
                             More Actions <ChevronDown size={14} className={`transition-transform ${showActions ? 'rotate-180' : ''}`} />
                          </button>
                          {showActions && (
-                             <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 z-[70] animate-in fade-in slide-in-from-top-1 duration-200">
-                                 <button onClick={handleExportExcel} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Export for Excel</button>
-                                 <button onClick={handlePrint} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Printer size={16} className="text-gray-400" /> Print</button>
+                             <div className="absolute top-full right-0 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 z-[70] animate-in fade-in slide-in-from-top-1 duration-200">
+                                 <button type="button" onClick={handleSavePdf} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Save as PDF</button>
+                                 <button type="button" onClick={handleExportExcel} className="w-full text-left px-5 py-2.5 hover:bg-gray-50 text-xs font-bold text-gray-600 flex items-center gap-3"><Download size={16} className="text-gray-400" /> Export to Excel</button>
                              </div>
                          )}
                     </div>
@@ -344,12 +354,12 @@ export default function InvoiceDetailsReport() {
                                             <tbody className="divide-y divide-gray-50 border-b border-gray-100">
                                                 {inv.items?.map((item, idx) => (
                                                     <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="py-5 pl-10 font-bold text-fb-navy max-w-xs">{item.description || '—'}</td>
+                                                        <td className="py-5 pl-10 font-bold text-fb-navy max-w-xs">{item.name || item.description || '—'}</td>
                                                         <td className="py-5 text-right font-medium">₱{parseFloat(item.rate || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                                        <td className="py-5 text-right font-medium">{item.quantity}</td>
+                                                        <td className="py-5 text-right font-medium">{item.qty ?? item.quantity ?? 0}</td>
                                                         <td className="py-5 text-right font-medium">0.00</td>
                                                         <td className="py-5 text-right font-medium">0.00</td>
-                                                        <td className="py-5 text-right pr-2 font-black text-fb-navy">₱{((item.rate || 0) * (item.quantity || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                                        <td className="py-5 text-right pr-2 font-black text-fb-navy">₱{((item.rate || 0) * (item.qty ?? item.quantity ?? 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

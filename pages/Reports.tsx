@@ -1,40 +1,31 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    BarChart3, PieChart, FileText, CreditCard, X, Star, 
-    ChevronRight, ChevronLeft, ChevronDown, Printer, Download,
-    Clock, Users, Calculator, Briefcase, FileSearch, ScrollText, 
-    BookOpen, RotateCcw, Landmark, TrendingUp, Handshake, DollarSign,
-    Scale, Receipt, History, ShoppingBag
-} from 'lucide-react';
+import { PieChart, FileText, Star, TrendingUp } from 'lucide-react';
+import { invoicesApi, expensesApi } from '../api';
 
 const REPORT_DEFINITIONS = [
     { title: "Invoice Details", desc: "A detailed summary of all invoices you've sent over a period of time", icon: FileText, category: "Invoice and Expense", path: "/reports/invoice-details" },
     { title: "Expense Report", desc: "See how much money you're spending, and where you're spending it", icon: PieChart, category: "Invoice and Expense", path: "/reports/expense-report" },
-    { title: "Item Sales", desc: "A breakdown of sales and revenue for each item or service you sell", icon: ShoppingBag, category: "Invoice and Expense", path: "/reports/item-sales" },
-    { title: "Profit and Loss", desc: "A summary of your total income, expenses, and net profit.", icon: BarChart3, category: "Accounting", updated: true },
-    { title: "Accounts Aging", desc: "Find out which clients are taking a long time to pay", icon: Clock, category: "Payments" },
-    { title: "General Ledger", desc: "A complete record of transactions and balances for all your accounts.", icon: ScrollText, category: "Accounting", updated: true },
-    { title: "Revenue by Client", desc: "A breakdown of how much revenue each of your clients is bringing in.", icon: TrendingUp, category: "Accounting", updated: true },
 ];
 
 export default function Reports() {
     const navigate = useNavigate();
     const [favorites, setFavorites] = useState(['Invoice Details', 'Expense Report', 'Item Sales']);
     const [stats, setStats] = useState({ revenue: 0, expense: 0, net: 0 });
-    const [activeCategory, setActiveCategory] = useState('All');
+    const [activeCategory, setActiveCategory] = useState('Invoice and Expense');
 
     useEffect(() => {
-        const invoices = JSON.parse(localStorage.getItem('fb_invoices') || '[]');
-        const expenses = JSON.parse(localStorage.getItem('fb_expenses') || '[]');
         const storedFavs = JSON.parse(localStorage.getItem('fb_report_favorites'));
         if (storedFavs) setFavorites(storedFavs);
-        
-        const rev = invoices.filter(i => i.status === 'Paid').reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
-        const exp = expenses.reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
-        
-        setStats({ revenue: rev, expense: exp, net: rev - exp });
+        (async () => {
+            const [invRes, expRes] = await Promise.all([invoicesApi.getAll(), expensesApi.getAll()]);
+            const invoices = invRes.success && invRes.data ? invRes.data : [];
+            const expenses = expRes.success && expRes.data ? expRes.data : [];
+            const rev = invoices.filter((i: any) => i.status === 'Paid').reduce((a: number, b: any) => a + (Number(b.total) || 0), 0);
+            const exp = expenses.reduce((a: number, b: any) => a + (Number(b.amount) || 0), 0);
+            setStats({ revenue: rev, expense: exp, net: rev - exp });
+        })();
     }, []);
 
     const toggleFavorite = (title: string) => {
@@ -121,7 +112,7 @@ export default function Reports() {
 
             <div className="space-y-10">
                 <div className="flex gap-10 border-b border-gray-100 overflow-x-auto scrollbar-hide">
-                    {['All', 'Invoice and Expense', 'Payments', 'Accounting'].map(cat => (
+                    {['Invoice and Expense'].map(cat => (
                         <button 
                             key={cat}
                             onClick={() => setActiveCategory(cat)}
@@ -134,7 +125,7 @@ export default function Reports() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {REPORT_DEFINITIONS
-                        .filter(r => activeCategory === 'All' || r.category === activeCategory)
+                        .filter(r => r.category === activeCategory)
                         .map(report => (
                             <ReportCard key={report.title} report={report} />
                     ))}

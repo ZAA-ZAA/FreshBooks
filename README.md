@@ -3,6 +3,10 @@
 Invoicing and billing web app: clients, invoices, estimates, expenses, payments, and reports.  
 Python/Flask backend with PostgreSQL; React frontend.
 
+**Features:** Multi-tenant auth (signup with OTP), invoices & estimates (with PDF download and email), expenses with per-expense receipt photos (stored in DB), tenant logo (stored in DB, syncs across devices), Invoice Details and Expense reports (Save as PDF, Export to Excel, Send by email). Settings uses the current tenant’s business info; Business Information is saved to the tenant and used in invoice/estimate templates.
+
+**Excel export (reports):** Reports export as CSV (open in Excel). To **password-protect** the workbook for editing: open the exported file in Microsoft Excel, go to **Review → Protect Sheet** or **File → Info → Protect Workbook → Encrypt with Password**, and set a password.
+
 ---
 
 ## What you need

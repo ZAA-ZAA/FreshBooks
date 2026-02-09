@@ -2,11 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
-    X, CheckCircle2, ChevronDown, ChevronRight, Image as ImageIcon, 
-    Calendar, Receipt, Tag, Briefcase, Smile, Home, Pizza,
-    Clock, Globe, RotateCcw, UserPlus, Info, Users, AlertCircle, Loader2
+    X, CheckCircle2, ChevronDown, Image as ImageIcon, 
+    Calendar, Receipt, Briefcase, Smile, Home, AlertCircle, Loader2
 } from 'lucide-react';
-import { expensesApi, clientsApi, ExpenseData, ClientData } from '../api';
+import { expensesApi, ExpenseData } from '../api';
 
 const CATEGORIES = [
     { name: 'Personal', icon: <Smile size={18} className="text-emerald-500" /> },
@@ -25,10 +24,8 @@ export default function ExpenseCreate() {
     const [amount, setAmount] = useState('0.00');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('Rent or Lease');
-    const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
+    const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
     
-    const [existingClients, setExistingClients] = useState<ClientData[]>([]);
-    const [showClientMenu, setShowClientMenu] = useState(false);
     const [showCategoryMenu, setShowCategoryMenu] = useState(false);
     const [showToast, setShowToast] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +33,7 @@ export default function ExpenseCreate() {
     const [error, setError] = useState<string | null>(null);
     
     const categoryRef = useRef(null);
-    const clientRef = useRef(null);
+    const receiptInputRef = useRef<HTMLInputElement>(null);
 
     const TOAST_DURATION_MS = 4000;
 
@@ -52,12 +49,6 @@ export default function ExpenseCreate() {
 
     const loadInitialData = async () => {
         setIsLoading(true);
-        
-        // Load clients
-        const clientsResponse = await clientsApi.getAll();
-        if (clientsResponse.success && clientsResponse.data) {
-            setExistingClients(clientsResponse.data);
-        }
 
         if (isEdit) {
             const response = await expensesApi.getById(id!);
@@ -68,20 +59,13 @@ export default function ExpenseCreate() {
                 setAmount(exp.amount?.toString() || '0.00');
                 setCategory(exp.category || 'Rent or Lease');
                 setDescription(exp.description || '');
-                
-                if (exp.client_id && clientsResponse.data) {
-                    const matched = clientsResponse.data.find(c => c.id === exp.client_id);
-                    if (matched) setSelectedClient(matched);
-                }
+                if (exp.receipt_url) setReceiptUrl(exp.receipt_url);
             }
         }
 
         const handleClickOutside = (event: MouseEvent) => {
             if (categoryRef.current && !categoryRef.current.contains(event.target)) {
                 setShowCategoryMenu(false);
-            }
-            if (clientRef.current && !clientRef.current.contains(event.target)) {
-                setShowClientMenu(false);
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
@@ -111,8 +95,8 @@ export default function ExpenseCreate() {
             amount: parseFloat(amount) || 0,
             category: category,
             description: description,
-            client_id: selectedClient?.id || undefined,
-            status: 'Draft'
+            status: 'Draft',
+            receipt_url: receiptUrl || undefined
         };
 
         let response;
@@ -181,11 +165,26 @@ export default function ExpenseCreate() {
                     <div className="flex flex-col lg:flex-row gap-12 items-start">
                         <div className="flex-1 bg-white rounded-lg shadow-2xl p-16 relative animate-in zoom-in-95 duration-300 w-full min-h-[700px] border-t-8 border-t-fb-green">
                             
-                            <div className="absolute top-10 right-16 w-44 h-56 bg-gray-50 border border-gray-100 rounded-sm shadow-sm rotate-3 flex flex-col items-center justify-center text-center p-4 group cursor-pointer hover:rotate-0 transition-transform">
-                                <div className="text-gray-300 group-hover:text-fb-blue transition-colors">
-                                    <ImageIcon size={32} />
-                                    <p className="font-bold text-[10px] uppercase tracking-widest mt-2">Add Receipt</p>
-                                </div>
+                            <input type="file" accept="image/*" ref={receiptInputRef} className="hidden" onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file || !file.type.startsWith('image/')) return;
+                                const reader = new FileReader();
+                                reader.onload = () => { setReceiptUrl(reader.result as string); };
+                                reader.readAsDataURL(file);
+                                e.target.value = '';
+                            }} />
+                            <div
+                                onClick={() => receiptInputRef.current?.click()}
+                                className="absolute top-10 right-16 w-44 h-56 bg-gray-50 border border-gray-100 rounded-sm shadow-sm rotate-3 flex flex-col items-center justify-center text-center p-4 group cursor-pointer hover:rotate-0 transition-transform overflow-hidden"
+                            >
+                                {receiptUrl ? (
+                                    <img src={receiptUrl} alt="Receipt" className="w-full h-full object-contain" />
+                                ) : (
+                                    <div className="text-gray-300 group-hover:text-fb-blue transition-colors">
+                                        <ImageIcon size={32} />
+                                        <p className="font-bold text-[10px] uppercase tracking-widest mt-2">Add Receipt</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-12 max-w-lg">
@@ -237,43 +236,6 @@ export default function ExpenseCreate() {
                             </div>
                         </div>
 
-                        <aside className="w-full lg:w-[320px] space-y-10">
-                            <div>
-                                <h3 className="text-2xl font-black text-fb-navy mb-6 uppercase tracking-tighter">Settings</h3>
-                                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden divide-y divide-gray-50">
-                                    <div className="relative" ref={clientRef}>
-                                        <div onClick={() => setShowClientMenu(!showClientMenu)} className="p-6 flex items-center justify-between hover:bg-gray-50 cursor-pointer group transition-colors">
-                                            <div className="flex items-start gap-4">
-                                                <Users className="text-gray-400 group-hover:text-fb-blue mt-1" size={20} />
-                                                <div>
-                                                    <div className="font-bold text-[13px] text-fb-navy">Assign to Client</div>
-                                                    <div className="text-[11px] text-fb-blue font-bold mt-1 uppercase tracking-widest">{selectedClient ? selectedClient.company : 'NONE (Internal)'}</div>
-                                                </div>
-                                            </div>
-                                            <ChevronRight className="text-gray-300" size={16} />
-                                        </div>
-                                        {showClientMenu && (
-                                            <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-lg shadow-2xl z-[70] py-2 animate-in fade-in duration-200">
-                                                {existingClients.map(c => (
-                                                    <div key={c.id} onClick={() => { setSelectedClient(c); setShowClientMenu(false); }} className="px-5 py-3 hover:bg-fb-gray cursor-pointer font-bold text-sm text-fb-navy">
-                                                        {c.company}
-                                                    </div>
-                                                ))}
-                                                <div onClick={() => { setSelectedClient(null); setShowClientMenu(false); }} className="px-5 py-3 hover:bg-fb-gray cursor-pointer font-bold text-sm text-gray-400">Clear Assignment (Internal)</div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="p-6 flex items-center justify-between hover:bg-gray-50 cursor-pointer group transition-colors">
-                                        <div className="flex items-start gap-4">
-                                            <RotateCcw className="text-gray-400 group-hover:text-fb-blue mt-1" size={20} />
-                                            <div className="font-bold text-[13px] text-fb-navy">Make Recurring</div>
-                                        </div>
-                                        <ChevronRight className="text-gray-300" size={16} />
-                                    </div>
-                                </div>
-                            </div>
-                        </aside>
                     </div>
                 </div>
             </div>

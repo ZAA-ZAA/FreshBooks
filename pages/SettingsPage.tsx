@@ -1,19 +1,22 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { User, Building, CreditCard, CheckCircle2, Loader2, Shield, Bell, Save } from 'lucide-react';
+import { useAuth } from '../App';
+import { tenantApi } from '../api';
 
 export default function SettingsPage() {
+  const { user, tenant } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@demo.com',
-    phone: '(555) 123-4567',
-    companyName: 'Demo Company',
-    address: '123 Business Rd, Tech City, 10001',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    companyName: '',
+    address: '',
     industry: 'Technology',
     currency: 'PHP — Philippine Peso'
   });
@@ -21,9 +24,36 @@ export default function SettingsPage() {
   const TOAST_DURATION_MS = 4000;
 
   useEffect(() => {
+    if (user) {
+      const [first = '', last = ''] = (user.first_name || '').split(' ');
+      setFormData(prev => ({
+        ...prev,
+        firstName: user.first_name || prev.firstName,
+        lastName: user.last_name || prev.lastName,
+        email: user.email || prev.email,
+      }));
+    }
+  }, [user?.id, user?.first_name, user?.last_name, user?.email]);
+
+  useEffect(() => {
+    if (tenant) {
+      setFormData(prev => ({
+        ...prev,
+        companyName: tenant.name || prev.companyName,
+        phone: tenant.phone || prev.phone,
+        address: tenant.address || prev.address,
+        currency: tenant.currency ? `${tenant.currency} — ${tenant.currency === 'PHP' ? 'Philippine Peso' : tenant.currency === 'USD' ? 'US Dollar' : tenant.currency === 'EUR' ? 'Euro' : tenant.currency}` : prev.currency,
+      }));
+    }
+  }, [tenant?.id, tenant?.name, tenant?.phone, tenant?.address, tenant?.currency]);
+
+  useEffect(() => {
     const stored = localStorage.getItem('fb_user_profile');
     if (stored) {
-      setFormData(prev => ({ ...prev, ...JSON.parse(stored) }));
+      try {
+        const parsed = JSON.parse(stored);
+        setFormData(prev => ({ ...prev, ...parsed }));
+      } catch (_) {}
     }
   }, []);
 
@@ -33,14 +63,26 @@ export default function SettingsPage() {
     return () => clearTimeout(t);
   }, [showToast]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      localStorage.setItem('fb_user_profile', JSON.stringify(formData));
+    try {
+      if (activeTab === 'business') {
+        const currencyCode = formData.currency?.split(' ')[0] || 'PHP';
+        const res = await tenantApi.update({
+          name: formData.companyName,
+          phone: formData.phone || undefined,
+          address: formData.address || undefined,
+          currency: currencyCode,
+        });
+        if (res.success) setShowToast(true);
+      } else {
+        localStorage.setItem('fb_user_profile', JSON.stringify(formData));
+        setShowToast(true);
+      }
+    } finally {
       setLoading(false);
-      setShowToast(true);
-    }, 800);
+    }
   };
 
   const tabs = [

@@ -178,6 +178,9 @@ export const tenantApi = {
     async updateLogo(logo: string | null): Promise<ApiResponse<{ logo: string | null }>> {
         return put<{ logo: string | null }>('/tenant/logo', { logo });
     },
+    async update(data: { name?: string; phone?: string; address?: string; country?: string; currency?: string }): Promise<ApiResponse<any>> {
+        return put<any>('/tenant', data);
+    },
 };
 
 // ==================== CLIENT API ====================
@@ -347,6 +350,7 @@ export interface ExpenseData {
     amount?: number;
     status?: string;
     is_billable?: boolean;
+    receipt_url?: string | null;  // base64 data URL per expense (receipt photo)
 }
 
 export const expensesApi = {

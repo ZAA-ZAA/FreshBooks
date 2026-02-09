@@ -288,6 +288,29 @@ def update_tenant_logo():
     db.session.commit()
     return success_response({'logo': tenant.logo_data}, 'Logo updated')
 
+@app.route('/api/tenant', methods=['PUT'])
+def update_tenant():
+    """Update current tenant (name, phone, address, country, currency). Used by Settings."""
+    tenant_id = get_tenant_id()
+    if not tenant_id:
+        return error_response('Not authenticated', 401)
+    tenant = Tenant.query.get(tenant_id)
+    if not tenant:
+        return error_response('Tenant not found', 404)
+    data = request.get_json() or {}
+    if 'name' in data and data['name'] is not None:
+        tenant.name = str(data['name'])
+    if 'phone' in data:
+        tenant.phone = str(data['phone']) if data['phone'] is not None else None
+    if 'address' in data:
+        tenant.address = str(data['address']) if data['address'] is not None else None
+    if 'country' in data and data['country'] is not None:
+        tenant.country = str(data['country'])
+    if 'currency' in data and data['currency'] is not None:
+        tenant.currency = str(data['currency'])
+    db.session.commit()
+    return success_response(tenant.to_dict(), 'Tenant updated')
+
 # ==================== CLIENT ROUTES ====================
 
 @app.route('/api/clients', methods=['GET'])
@@ -956,6 +979,7 @@ def create_expense():
         if not client:
             return error_response('Selected client not found')
     
+    receipt_data = data.get('receipt') or data.get('receipt_url')
     expense = Expense(
         tenant_id=tenant_id,
         client_id=client_id if client_id else None,
@@ -966,7 +990,8 @@ def create_expense():
         description=data.get('description', ''),
         amount=float(data['amount']),
         status=data.get('status', 'Draft'),
-        is_billable=data.get('is_billable', False)
+        is_billable=data.get('is_billable', False),
+        receipt_url=receipt_data if receipt_data else None
     )
     
     db.session.add(expense)
@@ -1006,6 +1031,8 @@ def update_expense(expense_id):
         expense.status = data['status']
     if 'is_billable' in data:
         expense.is_billable = data['is_billable']
+    if 'receipt' in data or 'receipt_url' in data:
+        expense.receipt_url = data.get('receipt') or data.get('receipt_url') or None
     
     db.session.commit()
     
